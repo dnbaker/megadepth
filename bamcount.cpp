@@ -15,6 +15,8 @@
 #include <cstring>
 #include <unordered_map>
 #include <vector>
+#include <math.h>
+#include <zlib.h>
 #include <htslib/sam.h>
 #include <htslib/bgzf.h>
 #include "bigWig.h"
@@ -353,18 +355,29 @@ static void reset_array(uint32_t* arr, const long arr_sz) {
         arr[i] = 0;
 }
 
+//used for buffering up text/gz output
+int OUT_BUFF_SZ=400000;
+int COORD_STR_LEN=34;
 static uint64_t print_array(const char* prefix, 
                         char* chrm,
                         const uint32_t* arr, 
                         const long arr_sz,
                         const bool skip_zeros,
                         bigWigFile_t* bwfp,
+                        gzFile* cov_file,
                         const bool just_auc = false) {
     bool first = true;
     bool first_print = true;
     float running_value = 0;
     uint32_t last_pos = 0;
     uint64_t auc = 0;
+    int chrnamelen = strlen(chrm);
+    int total_line_len = chrnamelen + COORD_STR_LEN;
+    int num_lines_per_buf = round(OUT_BUFF_SZ / total_line_len) - 3;
+    fprintf(stdout, "num_lines_per_buf %d\n", num_lines_per_buf);
+    char buf[OUT_BUFF_SZ];
+    int buf_written = 0;
+    char* bufptr = buf;
     //this will print the coordinates in base-0
     for(uint32_t i = 0; i < arr_sz; i++) {
         if(first || running_value != arr[i]) {
@@ -377,8 +390,23 @@ static uint64_t print_array(const char* prefix,
                             bwAddIntervals(bwfp, &chrm, &last_pos, &i, &running_value, 1);
                         else if(bwfp)
                             bwAppendIntervals(bwfp, &last_pos, &i, &running_value, 1);
+                        /*else if(cov_file)
+                            gzprintf(*cov_file,"%s\t%u\t%u\t%.0f\n", chrm, last_pos, i, running_value);
                         else
-                            fprintf(stdout, "%s\t%u\t%u\t%.0f\n", prefix, last_pos, i, running_value);
+                            fprintf(stdout, "%s\t%u\t%u\t%.0f\n", prefix, last_pos, i, running_value);*/
+                        else {
+                            if(buf_written >= num_lines_per_buf) {
+                                bufptr[0]='\0';
+                                if(cov_file)
+                                    gzprintf(*cov_file, "%s", buf);
+                                else
+                                   fprintf(stdout, "%s", buf); 
+                                bufptr = buf;
+                                buf_written = 0;
+                            }
+                            bufptr += sprintf(bufptr, "%s\t%u\t%u\t%.0f\n", chrm, last_pos, i, running_value);
+                            buf_written++;
+                        } 
                         first_print = false;
                     }
                 }
@@ -396,6 +424,8 @@ static uint64_t print_array(const char* prefix,
                     bwAddIntervals(bwfp, &chrm, &last_pos, (uint32_t*) &arr_sz, &running_value, 1);
                 else if(bwfp)
                     bwAppendIntervals(bwfp, &last_pos, (uint32_t*) &arr_sz, &running_value, 1);
+                else if(cov_file)
+                    gzprintf(*cov_file,"%s\t%u\t%u\t%.0f\n", chrm, last_pos, arr_sz, running_value);
                 else
                     fprintf(stdout, "%s\t%u\t%lu\t%0.f\n", prefix, last_pos, arr_sz, running_value);
             }
@@ -831,6 +861,7 @@ int main(int argc, const char** argv) {
     uint64_t annotated_auc = 0;
     uint64_t unique_annotated_auc = 0;
     FILE* auc_file = nullptr;
+    gzFile cov_file = nullptr;
     bool just_auc = false;
     if(has_option(argv, argv+argc, "--coverage") || has_option(argv, argv+argc, "--auc")) {
         compute_coverage = true;
@@ -840,6 +871,11 @@ int main(int argc, const char** argv) {
         if(has_option(argv, argv+argc, "--bigwig")) {
             const char *bw_fn = *get_option(argv, argv+argc, "--bigwig");
             bwfp = create_bigwig_file(hdr, bw_fn, "all.bw");
+        }
+        else if(has_option(argv, argv+argc, "--gzip")) {
+            const char *cov_fn = *get_option(argv, argv+argc, "--gzip");
+            cov_file = gzopen(cov_fn, "wb");
+            gzbuffer(cov_file, OUT_BUFF_SZ);
         }
         if(has_option(argv, argv+argc, "--auc")) {
             const char *prefix = *get_option(argv, argv+argc, "--auc");
@@ -967,10 +1003,10 @@ int main(int argc, const char** argv) {
                     if(ptid != -1) {
                         overlapping_mates.clear();
                         sprintf(prefix, "cov\t%d", ptid);
-                        all_auc += print_array(prefix, hdr->target_name[ptid], coverages, hdr->target_len[ptid], false, bwfp, just_auc);
+                        all_auc += print_array(prefix, hdr->target_name[ptid], coverages, hdr->target_len[ptid], false, bwfp, &cov_file, just_auc);
                         if(unique) {
                             sprintf(prefix, "ucov\t%d", ptid);
-                            unique_auc += print_array(prefix, hdr->target_name[ptid], unique_coverages, hdr->target_len[ptid], false, ubwfp, just_auc);
+                            unique_auc += print_array(prefix, hdr->target_name[ptid], unique_coverages, hdr->target_len[ptid], false, ubwfp, &cov_file, just_auc);
                         }
                         //if we also want to sum coverage across a user supplied file of annotated regions
                         if(sum_annotation && annotations.find(hdr->target_name[ptid]) != annotations.end()) {
@@ -1098,10 +1134,10 @@ int main(int argc, const char** argv) {
     if(compute_coverage) {
         if(ptid != -1) {
             sprintf(prefix, "cov\t%d", ptid);
-            all_auc += print_array(prefix, hdr->target_name[ptid], coverages, hdr->target_len[ptid], false, bwfp, just_auc);
+            all_auc += print_array(prefix, hdr->target_name[ptid], coverages, hdr->target_len[ptid], false, bwfp, &cov_file, just_auc);
             if(unique) {
                 sprintf(prefix, "ucov\t%d", ptid);
-                unique_auc += print_array(prefix, hdr->target_name[ptid], unique_coverages, hdr->target_len[ptid], false, ubwfp, just_auc);
+                unique_auc += print_array(prefix, hdr->target_name[ptid], unique_coverages, hdr->target_len[ptid], false, ubwfp, &cov_file, just_auc);
             }
             if(sum_annotation && annotations.find(hdr->target_name[ptid]) != annotations.end()) {
                 sum_annotations(coverages, annotations[hdr->target_name[ptid]], hdr->target_len[ptid], hdr->target_name[ptid], afp, &annotated_auc, just_auc);
@@ -1162,6 +1198,8 @@ int main(int argc, const char** argv) {
         fclose(afp);
     if(uafp)
         fclose(uafp);
+    if(cov_file)
+        gzclose(cov_file);
     fprintf(stdout,"Read %lu records\n",recs);
     if(count_bases) {
         fprintf(stdout,"%lu records passed filters\n",reads_processed);
