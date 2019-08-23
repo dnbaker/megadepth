@@ -1443,39 +1443,6 @@ int main(int argc, const char** argv) {
     callback_list process_cigar_callbacks;
     args_list process_cigar_output_args;
 
-    int filter_out = -1;
-    int filter_in = -1;
-    std::fstream fq0_file;
-    std::fstream fq1_file;
-    std::fstream fq2_file;
-    bool bam2fastq = false;
-    bool one_file = false;
-    bool re_reversed = false;
-    str2str read_mate;
-    if(has_option(argv, argv+argc, "--bam2fastq")) {
-        bam2fastq = true;
-        re_reversed = has_option(argv, argv+argc, "--re-reverse");
-        one_file = has_option(argv, argv+argc, "--one-file");
-        const char *prefix = *get_option(argv, argv+argc, "--bam2fastq");
-        char afn[1024];
-        if(!one_file) {
-            sprintf(afn, "%s_1.fastq", prefix);
-            fq1_file.open(afn, std::fstream::out);
-            sprintf(afn, "%s_2.fastq", prefix);
-            fq2_file.open(afn, std::fstream::out);
-        }
-        sprintf(afn, "%s.fastq", prefix);
-        fq0_file.open(afn, std::fstream::out);
-        if(has_option(argv, argv+argc, "--filter-out")) {
-            const char** filter_out_ = get_option(argv, argv+argc, "--filter-out");
-            filter_out = atoi(*filter_out_);
-        }
-        if(has_option(argv, argv+argc, "--filter-in")) {
-            const char** filter_in_ = get_option(argv, argv+argc, "--filter-in");
-            filter_in = atoi(*filter_in_);
-        }
-    }
-
     args_list maplen_outlist;
     uint64_t total_number_bases_processed = 0;
     maplen_outlist.push_back(&total_number_bases_processed);
@@ -1939,13 +1906,6 @@ int main(int argc, const char** argv) {
         fclose(afp);
     if(uafp)
         fclose(uafp);
-    if(bam2fastq) {
-        fq0_file.close();
-        if(!one_file) {
-            fq1_file.close();
-            fq2_file.close();
-        }
-    }
     fprintf(stdout,"Read %lu records\n",recs);
     if(count_bases) {
         fprintf(stdout,"%lu records passed filters\n",reads_processed);
