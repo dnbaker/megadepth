@@ -22,14 +22,10 @@ diff tests/test2.bam.jxs.tsv test2.bam.jxs.tsv
 #test bigwig2sums/auc
 time ./bcd_runner test.bam.all.bw --annotation tests/testbw1.bed test.bam.bw1 >> test_run_out 2>&1
 diff test.bam.bw1.all.tsv tests/testbw1.bed.out.tsv
-tail -n1 test_run_out > test.bam.bw1.auc.tsv 
-diff test.bam.bw1.auc.tsv tests/testbw1.bed.auc
 
 ##use different order in BED file from what's in BW to test keep_order == true
 time ./bcd_runner test.bam.all.bw --annotation tests/testbw2.bed test.bam.bw2 >> test_run_out 2>&1
 diff test.bam.bw2.all.tsv tests/testbw2.bed.out.tsv
-tail -n1 test_run_out > test.bam.bw2.auc.tsv 
-diff test.bam.bw2.auc.tsv tests/testbw2.bed.auc
 
 #test bigwig2mean
 time ./bcd_runner test.bam.all.bw --op mean --annotation tests/testbw2.bed bw2.mean >> test_run_out 2>&1
@@ -42,3 +38,11 @@ diff bw2.min.all.tsv tests/testbw2.bed.min
 #test bigwig2max
 time ./bcd_runner test.bam.all.bw --op max --annotation tests/testbw2.bed bw2.max >> test_run_out 2>&1
 diff bw2.max.all.tsv tests/testbw2.bed.max
+
+#now test same-start alignments for overlapping pairs
+./bcd_runner tests/test3.bam --coverage --no-head > t3.tsv
+diff tests/test3.out.tsv t3.tsv
+
+#with uniques
+./bcd_runner tests/test3.bam --coverage --no-head --min-unique-qual 10 --bigwig test3 --auc test3
+diff tests/test3.auc.out.tsv test3.auc.tsv
