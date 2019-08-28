@@ -19,13 +19,19 @@ time ./bcd_runner tests/test2.bam --threads 4 --no-head --junctions test2.bam > 
 
 diff tests/test2.bam.jxs.tsv test2.bam.jxs.tsv
 
+#test just total auc
+time ./bcd_runner test.bam.all.bw --auc  2>&1 > test_run_out | grep "AUC" > test.bw1.total_auc
+diff test.bw1.total_auc tests/testbw1.total_auc
+
 #test bigwig2sums/auc
-time ./bcd_runner test.bam.all.bw --annotation tests/testbw1.bed test.bam.bw1 >> test_run_out 2>&1
+time ./bcd_runner test.bam.all.bw --annotation tests/testbw1.bed test.bam.bw1 2>&1 >> test_run_out | fgrep AUC > test.bw1.annot_auc
 diff test.bam.bw1.all.tsv tests/testbw1.bed.out.tsv
+diff test.bw1.annot_auc tests/testbw1.annot_auc
 
 ##use different order in BED file from what's in BW to test keep_order == true
-time ./bcd_runner test.bam.all.bw --annotation tests/testbw2.bed test.bam.bw2 >> test_run_out 2>&1
+time ./bcd_runner test.bam.all.bw --annotation tests/testbw2.bed test.bam.bw2 2>&1 >> test_run_out | fgrep AUC > test.bw2.annot_auc
 diff test.bam.bw2.all.tsv tests/testbw2.bed.out.tsv
+diff test.bw2.annot_auc tests/testbw2.annot_auc
 
 #test bigwig2mean
 time ./bcd_runner test.bam.all.bw --op mean --annotation tests/testbw2.bed bw2.mean >> test_run_out 2>&1
