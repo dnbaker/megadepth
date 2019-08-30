@@ -1553,7 +1553,8 @@ int main(int argc, const char** argv) {
     bigWigFile_t *ubwfp = nullptr;
     uint64_t unique_auc = 0;
     uint64_t unique_annotated_auc = 0;
-    if(has_option(argv, argv+argc, "--coverage") || has_option(argv, argv+argc, "--auc")) {
+    bool print_coverage = has_option(argv, argv+argc, "--coverage") || has_option(argv, argv+argc, "--auc");
+    if(has_option(argv, argv+argc, "--coverage") || has_option(argv, argv+argc, "--auc") || has_option(argv, argv+argc, "--annotation")) {
         compute_coverage = true;
         chr_size = get_longest_target_size(hdr);
         coverages = new uint32_t[chr_size];
@@ -1672,11 +1673,13 @@ int main(int argc, const char** argv) {
                 if(tid != ptid) {
                     if(ptid != -1) {
                         overlapping_mates.clear();
-                        sprintf(prefix, "cov\t%d", ptid);
-                        all_auc += print_array(prefix, hdr->target_name[ptid], coverages, hdr->target_len[ptid], false, bwfp, just_auc);
-                        if(unique) {
-                            sprintf(prefix, "ucov\t%d", ptid);
-                            unique_auc += print_array(prefix, hdr->target_name[ptid], unique_coverages, hdr->target_len[ptid], false, ubwfp, just_auc);
+                        if(print_coverage) {
+                            sprintf(prefix, "cov\t%d", ptid);
+                            all_auc += print_array(prefix, hdr->target_name[ptid], coverages, hdr->target_len[ptid], false, bwfp, just_auc);
+                            if(unique) {
+                                sprintf(prefix, "ucov\t%d", ptid);
+                                unique_auc += print_array(prefix, hdr->target_name[ptid], unique_coverages, hdr->target_len[ptid], false, ubwfp, just_auc);
+                            }
                         }
                         //if we also want to sum coverage across a user supplied file of annotated regions
                         int keep_order_idx = keep_order?2:-1;
@@ -1890,11 +1893,13 @@ int main(int argc, const char** argv) {
     }
     if(compute_coverage) {
         if(ptid != -1) {
-            sprintf(prefix, "cov\t%d", ptid);
-            all_auc += print_array(prefix, hdr->target_name[ptid], coverages, hdr->target_len[ptid], false, bwfp, just_auc);
-            if(unique) {
-                sprintf(prefix, "ucov\t%d", ptid);
-                unique_auc += print_array(prefix, hdr->target_name[ptid], unique_coverages, hdr->target_len[ptid], false, ubwfp, just_auc);
+            if(print_coverage) {
+                sprintf(prefix, "cov\t%d", ptid);
+                all_auc += print_array(prefix, hdr->target_name[ptid], coverages, hdr->target_len[ptid], false, bwfp, just_auc);
+                if(unique) {
+                    sprintf(prefix, "ucov\t%d", ptid);
+                    unique_auc += print_array(prefix, hdr->target_name[ptid], unique_coverages, hdr->target_len[ptid], false, ubwfp, just_auc);
+                }
             }
             if(sum_annotation && annotations.find(hdr->target_name[ptid]) != annotations.end()) {
                 int keep_order_idx = keep_order?2:-1;
@@ -1907,7 +1912,7 @@ int main(int argc, const char** argv) {
                     annotation_chrs_seen[strdup(hdr->target_name[ptid])] = true;
             }
             //if we wanted to keep the chromosome order of the annotation output matching the input BED file
-            if(keep_order)
+            if(sum_annotation && keep_order)
                 output_all_coverage_ordered_by_BED(&chrm_order, &annotations, afp, uafp);
         }
         if(sum_annotation && auc_file) {
