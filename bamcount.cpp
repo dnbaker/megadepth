@@ -49,10 +49,10 @@ static const void print_version() {
 static const char USAGE[] = "BAM and BigWig utility.\n"
     "\n"
     "Usage:\n"
-    "  bamcount <bam|bw> [options]\n"
+    "  bamcount <bam|bw|-> [options]\n"
     "\n"
     "Options:\n"
-    "  -h --help            Show this screen.\n"
+    "  --help               Show this screen.\n"
     "  --version            Show version.\n"
     "  --threads            # of threads to do: BAM decompression OR compute sums over multiple BigWigs in parallel\n"
     "                       if the 2nd is intended then a TXT file listing the paths to the BigWigs to process in parallel\n"
@@ -121,7 +121,7 @@ static const char USAGE[] = "BAM and BigWig utility.\n"
 static const char* get_positional_n(const char ** begin, const char ** end, size_t n) {
     size_t i = 0;
     for(const char **itr = begin; itr != end; itr++) {
-        if((*itr)[0] != '-') {
+        if((*itr)[0] != '-' || strlen(*itr) == 1) {
             if(i++ == n) {
                 return *itr;
             }
