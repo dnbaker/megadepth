@@ -7,45 +7,27 @@ SET(CMAKE_C_COMPILER x86_64-w64-mingw32-gcc)
 SET(CMAKE_CXX_COMPILER x86_64-w64-mingw32-g++)
 SET(CMAKE_RC_COMPILER x86_64-w64-mingw32-windres)
 
-SET(CMAKE_FIND_ROOT_PATH /usr/x86_64-w64-mingw32 /data7/megadepth_windows)
+#SET(CMAKE_FIND_ROOT_PATH /usr/x86_64-w64-mingw32 /data7/megadepth_windows)
 
 project(megadepth)
 set(CMAKE_CXX_STANDARD 11)
-#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -DCURL_STATICLIB -DMEGADEPTH_VERSION=\"\\\"`cat ../VERSION`\\\"\"")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -DNOCURL -DMEGADEPTH_VERSION=\"\\\"`cat ../VERSION`\\\"\"")
-add_executable(megadepth_dynamic megadepth.cpp)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -DCURL_STATICLIB -DMEGADEPTH_VERSION=\"\\\"`cat ../VERSION`\\\"\"")
+#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -DNOCURL -DMEGADEPTH_VERSION=\"\\\"`cat ../VERSION`\\\"\"")
 add_executable(megadepth_static megadepth.cpp getline.c)
-add_executable(megadepth_statlib megadepth.cpp)
 include_directories(libdeflate htslib libBigWig)
 
 find_package(Threads REQUIRED)
-if(THREADS_HAVE_PTHREAD_ARG)
-    set_property(TARGET megadepth_dynamic PROPERTY COMPILE_OPTIONS "-pthread")
-    set_property(TARGET megadepth_dynamic PROPERTY INTERFACE_COMPILE_OPTIONS "-pthread")
-endif()
-if(CMAKE_THREAD_LIBS_INIT)
-    target_link_libraries(megadepth_dynamic "${CMAKE_THREAD_LIBS_INIT}")
-endif()
 
-target_link_libraries(megadepth_dynamic z hts BigWig -L${CMAKE_SOURCE_DIR}/htslib -L${CMAKE_SOURCE_DIR}/libBigWig)
-
+include_directories(${CMAKE_SOURCE_DIR}/curl-7.71.1-win64-mingw/include ${CMAKE_SOURCE_DIR}/zlib-1.2.11-win64-mingw/include)
 #include_directories(${CMAKE_SOURCE_DIR}/curl-7.71.1-win64-mingw/include ${CMAKE_SOURCE_DIR}/zlib-1.2.5-bin-x64/include)
-include_directories(${CMAKE_SOURCE_DIR}/zlib-1.2.5-bin-x64/include)
 
 #requires static libraries for both zlib and pthread
-target_link_libraries(megadepth_static -static ${CMAKE_SOURCE_DIR}/htslib/libhts.a ${CMAKE_SOURCE_DIR}/libBigWig/libBigWig.a ${CMAKE_SOURCE_DIR}/libdeflate/libdeflate.a ${CMAKE_SOURCE_DIR}/zlib-1.2.5-bin-x64/lib/libz.a -lwsock32 -lws2_32)
+#works w/o libcurl
+#target_link_libraries(megadepth_static -static ${CMAKE_SOURCE_DIR}/htslib/libhts.a ${CMAKE_SOURCE_DIR}/libBigWig/libBigWig.a -lpthread ${CMAKE_SOURCE_DIR}/libdeflate/libdeflate.a ${CMAKE_SOURCE_DIR}/zlib-1.2.5-bin-x64/lib/libz.a -lwsock32 -lws2_32)
 
-#target_link_libraries(megadepth_static -static ${CMAKE_SOURCE_DIR}/htslib/libhts.a ${CMAKE_SOURCE_DIR}/libBigWig/libBigWig.a ${CMAKE_SOURCE_DIR}/libdeflate/libdeflate.a ${CMAKE_SOURCE_DIR}/zlib-1.2.5-bin-x64/lib/libz.a ${CMAKE_SOURCE_DIR}/curl-7.71.1-win64-mingw/lib/libcurl.a -lwsock32 -lws2_32 -lcurl -L${CMAKE_SOURCE_DIR}/curl_support)
+#-lcurl -lnghttp2 -lssl -lcrypto -lidn2 -lssh2 -lz -lws2_32 -lwinmm -lwldap32 -lcrypt32 -lintl -lunistring -liconv -lbrotlidec-static -lbrotlicommon-static
+target_link_libraries(megadepth_static -static ${CMAKE_SOURCE_DIR}/htslib/libhts.a ${CMAKE_SOURCE_DIR}/libBigWig/libBigWig.a ${CMAKE_SOURCE_DIR}/libdeflate/libdeflate.a ${CMAKE_SOURCE_DIR}/curl-7.71.1-win64-mingw/lib/libcurl.a ${CMAKE_SOURCE_DIR}/nghttp2-1.41.0-win64-mingw/lib/libnghttp2.a ${CMAKE_SOURCE_DIR}/openssl-1.1.1g-win64-mingw/lib/libssl.a ${CMAKE_SOURCE_DIR}/openssl-1.1.1g-win64-mingw/lib/libcrypto.a ${CMAKE_SOURCE_DIR}/libssh2-1.9.0-win64-mingw/lib/libssh2.a ${CMAKE_SOURCE_DIR}/brotli-1.0.7-win64-mingw/lib/libbrotlidec-static.a ${CMAKE_SOURCE_DIR}/brotli-1.0.7-win64-mingw/lib/libbrotlicommon-static.a ${CMAKE_SOURCE_DIR}/zlib-1.2.11-win64-mingw/lib/libz.a -lcrypt32 -lwldap32 -pthread -lwsock32 -lws2_32)
 
-#target_link_libraries(megadepth_static -static ${CMAKE_SOURCE_DIR}/htslib/libhts.a ${CMAKE_SOURCE_DIR}/libBigWig/libBigWig.a ${CMAKE_SOURCE_DIR}/libdeflate/libdeflate.a ${CMAKE_SOURCE_DIR}/zlib-1.2.5-bin-x64/lib/libz.a ${CMAKE_SOURCE_DIR}/curl-7.71.1-win64-mingw/lib/libcurl.a -lwsock32 -lws2_32)
+#target_link_libraries(megadepth_static -static ${CMAKE_SOURCE_DIR}/htslib/libhts.a ${CMAKE_SOURCE_DIR}/libBigWig/libBigWig.a ${CMAKE_SOURCE_DIR}/libdeflate/libdeflate.a ${CMAKE_SOURCE_DIR}/curl-7.71.1-win64-mingw/lib/libcurl.a ${CMAKE_SOURCE_DIR}/nghttp2-1.41.0-win64-mingw/lib/libnghttp2.a ${CMAKE_SOURCE_DIR}/openssl-1.1.1g-win64-mingw/lib/libssl.a ${CMAKE_SOURCE_DIR}/openssl-1.1.1g-win64-mingw/lib/libcrypto.a ${CMAKE_SOURCE_DIR}/libssh2-1.9.0-win64-mingw/lib/libssh2.a ${CMAKE_SOURCE_DIR}/brotli-1.0.7-win64-mingw/lib/libbrotlidec-static.a ${CMAKE_SOURCE_DIR}/brotli-1.0.7-win64-mingw/lib/libbrotlicommon-static.a ${CMAKE_SOURCE_DIR}/zlib-1.2.5-bin-x64/lib/libz.a -lcrypt32 -lwldap32 -pthread -lwsock32 -lws2_32)
 
-
-#target_link_libraries(megadepth_static -static ${CMAKE_SOURCE_DIR}/htslib/libhts.a ${CMAKE_SOURCE_DIR}/libBigWig/libBigWig.a -lssl -lcrypto -lssh2 -lbcrypt -lcrypt32 -lnghttp2 -lwsock32 -lws2_32 ${CMAKE_SOURCE_DIR}/libdeflate/libdeflate.a ${CMAKE_SOURCE_DIR}/zlib-1.2.5-bin-x64/lib/libz.a -L${CMAKE_SOURCE_DIR}/curl_support)
-
-#target_link_libraries(megadepth_static -static ${CMAKE_SOURCE_DIR}/htslib/libhts.a ${CMAKE_SOURCE_DIR}/libBigWig/libBigWig.a ${CMAKE_SOURCE_DIR}/libdeflate/libdeflate.a ${CMAKE_SOURCE_DIR}/zlib-1.2.5-bin-x64/lib/libz.a ${CMAKE_SOURCE_DIR}/curl-7.71.1-win64-mingw/lib/libcurl.a ${CMAKE_SOURCE_DIR}/nghttp2-1.41.0-win64-mingw/lib/libnghttp2.a ${CMAKE_SOURCE_DIR}/openssl-1.1.1g-win64-mingw/lib/libcrypto.a ${CMAKE_SOURCE_DIR}/openssl-1.1.1g-win64-mingw/lib/libssl.a ${CMAKE_SOURCE_DIR}/brotli-1.0.7-win64-mingw/lib/libbrotlidec-static.a ${CMAKE_SOURCE_DIR}/brotli-1.0.7-win64-mingw/lib/libbrotlicommon-static.a ${CMAKE_SOURCE_DIR}/libssh2-1.9.0-win64-mingw/lib/libssh2.a -lwsock32 -lws2_32)
-
-#this build a dynamic binary, but with htslib, libBigWig, and libz statically linked in
-#remember order is backwards, earliest needed libraries go *last*
-target_link_libraries(megadepth_statlib ${CMAKE_SOURCE_DIR}/htslib/libhts.a ${CMAKE_SOURCE_DIR}/libBigWig/libBigWig.a -lz -lcurl -lpthread ${CMAKE_SOURCE_DIR}/libdeflate/libdeflate.a)
-
-set(CMAKE_EXE_LINKER_FLAGS "-static -static-libgcc -static-libstdc++")
+set(CMAKE_EXE_LINKER_FLAGS "-static-libgcc -static-libstdc++")

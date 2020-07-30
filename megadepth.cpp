@@ -47,6 +47,7 @@
 #define WINDOWS
 #ifdef WINDOWS
     #include "getline.h"
+    #include "mingw-std-threads/mingw.thread.h"
 #endif
 
 int UNKNOWN_FORMAT=-1;
