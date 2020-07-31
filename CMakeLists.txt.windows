@@ -3,11 +3,9 @@ SET(CMAKE_SYSTEM_NAME Windows)
 set(CMAKE_TRY_COMPILE_TARGET_TYPE "STATIC_LIBRARY")
 set( CMAKE_VERBOSE_MAKEFILE on )
 
-SET(CMAKE_C_COMPILER x86_64-w64-mingw32-gcc)
-SET(CMAKE_CXX_COMPILER x86_64-w64-mingw32-g++)
-SET(CMAKE_RC_COMPILER x86_64-w64-mingw32-windres)
-
-#SET(CMAKE_FIND_ROOT_PATH /usr/x86_64-w64-mingw32 /data7/megadepth_windows)
+#SET(CMAKE_C_COMPILER x86_64-w64-mingw32-gcc)
+#SET(CMAKE_CXX_COMPILER x86_64-w64-mingw32-g++)
+#SET(CMAKE_RC_COMPILER x86_64-w64-mingw32-windres)
 
 project(megadepth)
 set(CMAKE_CXX_STANDARD 11)
@@ -18,16 +16,16 @@ include_directories(libdeflate htslib libBigWig)
 
 find_package(Threads REQUIRED)
 
-include_directories(${CMAKE_SOURCE_DIR}/curl-7.71.1-win64-mingw/include ${CMAKE_SOURCE_DIR}/zlib-1.2.11-win64-mingw/include)
-#include_directories(${CMAKE_SOURCE_DIR}/curl-7.71.1-win64-mingw/include ${CMAKE_SOURCE_DIR}/zlib-1.2.5-bin-x64/include)
+include_directories(${CMAKE_SOURCE_DIR}/libcurl/include ${CMAKE_SOURCE_DIR}/zlib)
+#include_directories(${CMAKE_SOURCE_DIR}/curl-7.71.1-win64-mingw/include ${CMAKE_SOURCE_DIR}/zlib-1.2.11-win64-mingw)
 
 #requires static libraries for both zlib and pthread
 #works w/o libcurl
 #target_link_libraries(megadepth_static -static ${CMAKE_SOURCE_DIR}/htslib/libhts.a ${CMAKE_SOURCE_DIR}/libBigWig/libBigWig.a -lpthread ${CMAKE_SOURCE_DIR}/libdeflate/libdeflate.a ${CMAKE_SOURCE_DIR}/zlib-1.2.5-bin-x64/lib/libz.a -lwsock32 -lws2_32)
 
 #-lcurl -lnghttp2 -lssl -lcrypto -lidn2 -lssh2 -lz -lws2_32 -lwinmm -lwldap32 -lcrypt32 -lintl -lunistring -liconv -lbrotlidec-static -lbrotlicommon-static
-target_link_libraries(megadepth_static -static ${CMAKE_SOURCE_DIR}/htslib/libhts.a ${CMAKE_SOURCE_DIR}/libBigWig/libBigWig.a ${CMAKE_SOURCE_DIR}/libdeflate/libdeflate.a ${CMAKE_SOURCE_DIR}/curl-7.71.1-win64-mingw/lib/libcurl.a ${CMAKE_SOURCE_DIR}/nghttp2-1.41.0-win64-mingw/lib/libnghttp2.a ${CMAKE_SOURCE_DIR}/openssl-1.1.1g-win64-mingw/lib/libssl.a ${CMAKE_SOURCE_DIR}/openssl-1.1.1g-win64-mingw/lib/libcrypto.a ${CMAKE_SOURCE_DIR}/libssh2-1.9.0-win64-mingw/lib/libssh2.a ${CMAKE_SOURCE_DIR}/brotli-1.0.7-win64-mingw/lib/libbrotlidec-static.a ${CMAKE_SOURCE_DIR}/brotli-1.0.7-win64-mingw/lib/libbrotlicommon-static.a ${CMAKE_SOURCE_DIR}/zlib-1.2.11-win64-mingw/lib/libz.a -lcrypt32 -lwldap32 -pthread -lwsock32 -lws2_32)
+target_link_libraries(megadepth_static -static ${CMAKE_SOURCE_DIR}/htslib/libhts.a ${CMAKE_SOURCE_DIR}/libBigWig/libBigWig.a ${CMAKE_SOURCE_DIR}/libdeflate/libdeflate.a ${CMAKE_SOURCE_DIR}/libcurl/lib/libcurl.a ${CMAKE_SOURCE_DIR}/nghttp2/lib/libnghttp2.a ${CMAKE_SOURCE_DIR}/openssl/lib/libssl.a ${CMAKE_SOURCE_DIR}/openssl/lib/libcrypto.a ${CMAKE_SOURCE_DIR}/libssh2/lib/libssh2.a ${CMAKE_SOURCE_DIR}/brotli/lib/libbrotlidec-static.a ${CMAKE_SOURCE_DIR}/brotli/lib/libbrotlicommon-static.a ${CMAKE_SOURCE_DIR}/zlib/libz.a -lcrypt32 -lwldap32 -pthread -lwsock32 -lws2_32)
 
-#target_link_libraries(megadepth_static -static ${CMAKE_SOURCE_DIR}/htslib/libhts.a ${CMAKE_SOURCE_DIR}/libBigWig/libBigWig.a ${CMAKE_SOURCE_DIR}/libdeflate/libdeflate.a ${CMAKE_SOURCE_DIR}/curl-7.71.1-win64-mingw/lib/libcurl.a ${CMAKE_SOURCE_DIR}/nghttp2-1.41.0-win64-mingw/lib/libnghttp2.a ${CMAKE_SOURCE_DIR}/openssl-1.1.1g-win64-mingw/lib/libssl.a ${CMAKE_SOURCE_DIR}/openssl-1.1.1g-win64-mingw/lib/libcrypto.a ${CMAKE_SOURCE_DIR}/libssh2-1.9.0-win64-mingw/lib/libssh2.a ${CMAKE_SOURCE_DIR}/brotli-1.0.7-win64-mingw/lib/libbrotlidec-static.a ${CMAKE_SOURCE_DIR}/brotli-1.0.7-win64-mingw/lib/libbrotlicommon-static.a ${CMAKE_SOURCE_DIR}/zlib-1.2.5-bin-x64/lib/libz.a -lcrypt32 -lwldap32 -pthread -lwsock32 -lws2_32)
+#target_link_libraries(megadepth_static -static ${CMAKE_SOURCE_DIR}/htslib/libhts.a ${CMAKE_SOURCE_DIR}/libBigWig/libBigWig.a ${CMAKE_SOURCE_DIR}/libdeflate/libdeflate.a ${CMAKE_SOURCE_DIR}/curl-7.71.1-win64-mingw/lib/libcurl.a ${CMAKE_SOURCE_DIR}/nghttp2-1.41.0-win64-mingw/lib/libnghttp2.a ${CMAKE_SOURCE_DIR}/openssl-1.1.1g-win64-mingw/lib/libssl.a ${CMAKE_SOURCE_DIR}/openssl-1.1.1g-win64-mingw/lib/libcrypto.a ${CMAKE_SOURCE_DIR}/libssh2-1.9.0-win64-mingw/lib/libssh2.a ${CMAKE_SOURCE_DIR}/brotli-1.0.7-win64-mingw/lib/libbrotlidec-static.a ${CMAKE_SOURCE_DIR}/brotli-1.0.7-win64-mingw/lib/libbrotlicommon-static.a ${CMAKE_SOURCE_DIR}/zlib-1.2.11-win64-mingw/libz.a -lcrypt32 -lwldap32 -pthread -lwsock32 -lws2_32)
 
 set(CMAKE_EXE_LINKER_FLAGS "-static-libgcc -static-libstdc++")
