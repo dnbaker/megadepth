@@ -616,7 +616,43 @@ static const long get_longest_target_size(const bam_hdr_t * hdr) {
 }
 
 static void reset_array(uint32_t* arr, const long arr_sz) {
-    std::fill_n(arr, arr_sz, int32_t(0));
+#if __AVX2__
+    __m256i zero = _mm256_setzero_si256();
+    const size_t nsimd = arr_sz / 4;
+    const size_t nsimd4 = (nsimd / 4) * 4;
+    size_t i = 0;
+    for(; i < nsimd4; i += 4) {
+        _mm256_storeu_si256((__m256i *)(arr + 4 * i), zero);
+        _mm256_storeu_si256((__m256i *)(arr + 4 * (i + 1)), zero);
+        _mm256_storeu_si256((__m256i *)(arr + 4 * (i + 2)), zero);
+        _mm256_storeu_si256((__m256i *)(arr + 4 * (i + 3)), zero);
+    }
+    for(;i < nsimd; ++i) {
+        _mm256_storeu_si256((__m256i *)(arr + 4 * i), zero);
+    }
+    for(i *= 4; i < arr_sz; ++i) {
+        arr[i] = 0;
+    }
+#elif __SSE2__
+    __m128i zero = _mm_setzero_si128();
+    const size_t nsimd = arr_sz / 4;
+    const size_t nsimd4 = (nsimd / 4) * 4;
+    size_t i = 0;
+    for(; i < nsimd4; i += 4) {
+        _mm_storeu_si128((__m128i *)(arr + 4 * i), zero);
+        _mm_storeu_si128((__m128i *)(arr + 4 * (i + 1)), zero);
+        _mm_storeu_si128((__m128i *)(arr + 4 * (i + 2)), zero);
+        _mm_storeu_si128((__m128i *)(arr + 4 * (i + 3)), zero);
+    }
+    for(;i < nsimd; ++i) {
+        _mm_storeu_si128((__m128i *)(arr + 4 * i), zero);
+    }
+    for(i *= 4; i < arr_sz; ++i) {
+        arr[i] = 0;
+    }
+#else
+    std::memset(arr, 0, sizeof(uint32_t) * arr_sz);
+#endif
 }
 
 typedef hashmap<uint32_t,uint32_t> int2int;
@@ -726,15 +762,14 @@ static uint64_t print_array(const char* prefix,
         if(running_value > 0 || !skip_zeros) {
             auc += (arr_sz - last_pos) * ((long) running_value);
             if(not dont_output_coverage) {
-                if(bwfp && first_print) {
+                if(bwfp) {
                     running_value_ = static_cast<float>(running_value);
-                    bwAddIntervals(bwfp, &chrm, &last_pos, (uint32_t*) &arr_sz, &running_value_, 1);
-                }
-                else if(bwfp) {
-                    running_value_ = static_cast<float>(running_value);
-                    bwAppendIntervals(bwfp, &last_pos, (uint32_t*) &arr_sz, &running_value_, 1);
-                }
-                else {
+                    if(first_print) {
+                        bwAddIntervals(bwfp, &chrm, &last_pos, (uint32_t*) &arr_sz, &running_value_, 1);
+                    } else {
+                        bwAppendIntervals(bwfp, &last_pos, (uint32_t*) &arr_sz, &running_value_, 1);
+                    }
+                } else {
                     if(buf_written > 0) {
                         //bufptr[0]='\0';
                         (*printPtr)(cfh, buf, buf_len);
