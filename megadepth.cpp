@@ -687,27 +687,21 @@ static uint64_t print_array(const char* prefix,
                                 buf_len = 0;
                             }
                             memcpy(bufptr, chrm, chrnamelen);
+                            char *oldbufptr = bufptr;
                             bufptr += chrnamelen;
-                            //start bytes_written from here
-                            bytes_written = chrnamelen;
                             
-                            *bufptr='\t';
-                            bufptr+=1;
-                            bytes_written++;
+                            *bufptr++='\t';
                             //idea from https://github.com/brentp/mosdepth/releases/tag/v0.2.9
                             uint32_t digits = u32toa_countlut(last_pos, bufptr, '\t');
                             bufptr+=digits+1;
-                            bytes_written+=digits+1;
                             
                             digits = u32toa_countlut(i, bufptr, '\t');
                             bufptr+=digits+1;
-                            bytes_written+=digits+1;
                             
                             digits = u32toa_countlut(running_value, bufptr, '\n');
                             bufptr+=digits+1;
-                            bytes_written+=digits+1;
                             
-                            buf_len += bytes_written;
+                            buf_len += (bufptr - oldbufptr); // Track bytes written using the distance bufptr has traveled
                             buf_written++;
                         } 
                         first_print = false;
@@ -737,6 +731,7 @@ static uint64_t print_array(const char* prefix,
                         bufptr[0]='\0';
                         (*printPtr)(cfh, buf, buf_len);
                     }
+                    // This printing step could also be u32toa_countlut-ified
                     buf_len = sprintf(last_line, "%s\t%u\t%lu\t%u\n", chrm, last_pos, arr_sz, running_value);
                     //buf_len = sprintf(last_line, "%s\t%u\t%lu\t%.0f\n", chrm, last_pos, arr_sz, running_value);
                     (*printPtr)(cfh, last_line, buf_len);
