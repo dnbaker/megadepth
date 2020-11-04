@@ -210,7 +210,7 @@ static const char USAGE[] = "BAM and BigWig utility.\n"
     "\n";
 
 int my_write(void* fh, char* buf, uint32_t buf_len) {
-    return fprintf((FILE*) fh, "%s", buf);
+    return std::fwrite(buf, 1, buf_len, (FILE *)fh);
 }
 
 int my_gzwrite(void* fh, char* buf, uint32_t buf_len) {
