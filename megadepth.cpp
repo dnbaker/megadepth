@@ -618,7 +618,7 @@ static const long get_longest_target_size(const bam_hdr_t * hdr) {
 static void reset_array(uint32_t* arr, const long arr_sz) {
 #if __AVX2__
     __m256i zero = _mm256_setzero_si256();
-    const size_t nsimd = arr_sz / 4;
+    const size_t nsimd = arr_sz / (sizeof(__m256i) / sizeof(uint32_t));
     const size_t nsimd4 = (nsimd / 4) * 4;
     size_t i = 0;
     for(; i < nsimd4; i += 4) {
@@ -630,7 +630,7 @@ static void reset_array(uint32_t* arr, const long arr_sz) {
     for(;i < nsimd; ++i) {
         _mm256_storeu_si256((__m256i *)(arr + 4 * i), zero);
     }
-    for(i *= 4; i < arr_sz; ++i) {
+    for(i *= sizeof(__m256i) / sizeof(uint32_t); i < arr_sz; ++i) {
         arr[i] = 0;
     }
 #elif __SSE2__
