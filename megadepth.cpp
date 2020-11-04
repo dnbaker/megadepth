@@ -608,8 +608,7 @@ static const long get_longest_target_size(const bam_hdr_t * hdr) {
 }
 
 static void reset_array(uint32_t* arr, const long arr_sz) {
-    for(long i = 0; i < arr_sz; i++)
-        arr[i] = 0;
+    std::fill_n(arr, arr_sz, int32_t(0));
 }
                                 
 typedef hashmap<uint32_t,uint32_t> int2int;
@@ -827,7 +826,7 @@ static const int32_t calculate_coverage(const bam1_t *rec, uint32_t* coverages,
     //2) we're either not unique, or we're higher than the required quality
     int32_t mendpos = 0;
     int n_mspans = 0;
-    int32_t** mspans = nullptr;
+    std::unique_ptr<int32_t[]> mspans;
     int mspans_idx = 0;
     const std::string tn(qname);
     int32_t end_pos = bam_endpos(rec);
@@ -862,15 +861,14 @@ static const int32_t calculate_coverage(const bam1_t *rec, uint32_t* coverages,
             uint32_t* mcigar = &(mate_info[3]);
             //bash cigar to get spans of overlap
             int32_t malgn_end_pos = real_mate_pos;
-            mspans = new int32_t*[mn_cigar];
+            mspans.reset(new int32_t[mn_cigar * 2]);
             for (k = 0; k < mn_cigar; ++k) {
                 const int cigar_op = bam_cigar_op(mcigar[k]);
                 if(bam_cigar_type(cigar_op)&2) {
                     const int32_t len = bam_cigar_oplen(mcigar[k]);
                     if(bam_cigar_type(cigar_op)&1) {
-                        mspans[mspans_idx] = new int32_t(2);
-                        mspans[mspans_idx][0] = malgn_end_pos;
-                        mspans[mspans_idx][1] = malgn_end_pos + len;
+                        mspans[mspans_idx * 2] = malgn_end_pos;
+                        mspans[mspans_idx * 2 + 1] = malgn_end_pos + len;
                         mspans_idx++;
                     }
                     malgn_end_pos += len;
@@ -902,28 +900,28 @@ static const int32_t calculate_coverage(const bam1_t *rec, uint32_t* coverages,
                     if(n_mspans > 0 && algn_end_pos < mendpos) {
                         //loop until we find the next overlapping span
                         //if are current segment is too early we just keep the span index where it is
-                        while(mspans_idx < n_mspans && algn_end_pos >= mspans[mspans_idx][1])
+                        while(mspans_idx < n_mspans && algn_end_pos >= mspans[mspans_idx * 2 + 1])
                             mspans_idx++;
                         int32_t cur_end = algn_end_pos + len;
                         int32_t left_end = algn_end_pos;
-                        if(left_end < mspans[mspans_idx][0])
-                            left_end = mspans[mspans_idx][0];
+                        if(left_end < mspans[mspans_idx * 2])
+                            left_end = mspans[mspans_idx * 2];
                         //check 1) we've still got mate spans 2) current segment overlaps the current mate span
-                        while(mspans_idx < n_mspans && left_end < mspans[mspans_idx][1] 
-                                                    && cur_end > mspans[mspans_idx][0]) {
+                        while(mspans_idx < n_mspans && left_end < mspans[mspans_idx * 2 + 1]
+                                                    && cur_end > mspans[mspans_idx * 2]) {
                             //set right end of segment to decrement
                             int32_t right_end = cur_end;
                             int32_t next_left_end = left_end;
-                            if(right_end >= mspans[mspans_idx][1]) {
-                                right_end = mspans[mspans_idx][1];
+                            if(right_end >= mspans[mspans_idx * 2 + 1]) {
+                                right_end = mspans[mspans_idx * 2 + 1];
                                 //if our segment is greater than the previous mate's
                                 //also increment the mate spans index
                                 mspans_idx++;
                                 if(mspans_idx < n_mspans)
-                                    next_left_end = mspans[mspans_idx][0];
+                                    next_left_end = mspans[mspans_idx * 2];
                             }
                             else {
-                                next_left_end = mspans[mspans_idx][1];
+                                next_left_end = mspans[mspans_idx * 2 + 1];
                             }
                             for(z = left_end; z < right_end; z++) {
                                 coverages[z]--;
@@ -954,29 +952,29 @@ static const int32_t calculate_coverage(const bam1_t *rec, uint32_t* coverages,
                     if(n_mspans > 0 && algn_end_pos < mendpos) {
                         //loop until we find the next overlapping span
                         //if are current segment is too early we just keep the span index where it is
-                        while(mspans_idx < n_mspans && algn_end_pos >= mspans[mspans_idx][1])
+                        while(mspans_idx < n_mspans && algn_end_pos >= mspans[mspans_idx * 2 + 1])
                             mspans_idx++;
                         int32_t cur_end = algn_end_pos + len;
                         int32_t left_end = algn_end_pos;
-                        if(left_end < mspans[mspans_idx][0])
-                            left_end = mspans[mspans_idx][0];
+                        if(left_end < mspans[mspans_idx * 2])
+                            left_end = mspans[mspans_idx * 2];
                         //check 1) we've still got mate spans 2) current segment overlaps the current mate span
-                        while(mspans_idx < n_mspans && left_end < mspans[mspans_idx][1] 
-                                                    && cur_end > mspans[mspans_idx][0]) {
+                        while(mspans_idx < n_mspans && left_end < mspans[mspans_idx * 2 + 1] 
+                                                    && cur_end > mspans[mspans_idx * 2]) {
                             //set right end of segment to decrement
                             int32_t right_end = cur_end;
                             int32_t next_left_end = left_end;
-                            if(right_end >= mspans[mspans_idx][1]) {
-                                right_end = mspans[mspans_idx][1];
+                            if(right_end >= mspans[mspans_idx * 2 + 1]) {
+                                right_end = mspans[mspans_idx * 2 + 1];
                                 //if our segment is greater than the previous mate's
                                 //also increment the mate spans index
                                 //delete[] mspans[mspans_idx];
                                 mspans_idx++;
                                 if(mspans_idx < n_mspans)
-                                    next_left_end = mspans[mspans_idx][0];
+                                    next_left_end = mspans[mspans_idx * 2];
                             }
                             else {
-                                next_left_end = mspans[mspans_idx][1];
+                                next_left_end = mspans[mspans_idx * 2 + 1];
                             }
                             for(z = left_end; z < right_end; z++) {
                                 coverages[z]--;
@@ -988,11 +986,6 @@ static const int32_t calculate_coverage(const bam1_t *rec, uint32_t* coverages,
                 algn_end_pos += len;
             }
         }
-    }
-    if(mspans) {
-        for(k = 0; k < n_mspans; k++)
-            delete[] mspans[k];
-        delete[] mspans;
     }
     return algn_end_pos;
 }
@@ -1798,8 +1791,7 @@ int go_bam(const char* bam_arg, int argc, const char** argv, Op op, htsFile *bam
     //largest human chromosome is ~249M bases
     //long chr_size = 250000000;
     long chr_size = -1;
-    uint32_t* coverages = nullptr;
-    uint32_t* unique_coverages = nullptr;
+    std::unique_ptr<uint32_t[]> coverages, unique_coverages;
     bool compute_coverage = false;
     int bw_unique_min_qual = 0;
     read2len overlapping_mates;
@@ -1834,7 +1826,7 @@ int go_bam(const char* bam_arg, int argc, const char** argv, Op op, htsFile *bam
     if(coverage_opt || auc_opt || annotation_opt || bigwig_opt) {
         compute_coverage = true;
         chr_size = get_longest_target_size(hdr);
-        coverages = new uint32_t[chr_size];
+        coverages.reset(new uint32_t[chr_size]);
         if(bigwig_opt)
             bwfp = create_bigwig_file(hdr, prefix,"all.bw");
         if(unique) {
@@ -1856,7 +1848,7 @@ int go_bam(const char* bam_arg, int argc, const char** argv, Op op, htsFile *bam
             if(bigwig_opt)
                 ubwfp = create_bigwig_file(hdr, prefix, "unique.bw");
             bw_unique_min_qual = atoi(*(get_option(argv, argv+argc, "--min-unique-qual")));
-            unique_coverages = new uint32_t[chr_size];
+            unique_coverages.reset(new uint32_t[chr_size]);
         }
         if(coverage_opt && !bigwig_opt && no_coverage_stdout) {
             char cov_fn[1024];
@@ -1877,8 +1869,7 @@ int go_bam(const char* bam_arg, int argc, const char** argv, Op op, htsFile *bam
     mate2len* frag_mates = new mate2len(1);
     char cov_prefix[50]="";
     int32_t ptid = -1;
-    uint32_t* starts = nullptr;
-    uint32_t* ends = nullptr;
+    std::unique_ptr<uint32_t[]> starts, ends;
     bool compute_ends = false;
     FILE* rsfp = nullptr;
     FILE* refp = nullptr;
@@ -1891,8 +1882,8 @@ int go_bam(const char* bam_arg, int argc, const char** argv, Op op, htsFile *bam
         refp = fopen(refn,"w");
         if(chr_size == -1) 
             chr_size = get_longest_target_size(hdr);
-        starts = new uint32_t[chr_size];
-        ends = new uint32_t[chr_size];
+        starts.reset(new uint32_t[chr_size]);
+        ends.reset(new uint32_t[chr_size]);
     }
     bool print_frag_dist = false;
     FILE* fragdist_file = nullptr;
@@ -1970,7 +1961,7 @@ int go_bam(const char* bam_arg, int argc, const char** argv, Op op, htsFile *bam
         //fprintf(stderr, "recs %lu, qname %s\n",recs,qname);
         //*******Main Quantification Conditional (for ref & alt coverage, frag dist)
         //filter OUT unmapped and secondary alignments
-        //if((c->flag & BAM_FUNMAP) == 0 && (c->flag & BAM_FSECONDARY) == 0) {
+        //if((c->flag & BAM_FUNMAP) == 0 && (c->flag & BAM_FSECONDARY) == 0)
         //catch case where c-flag is 0 and we've specified an all inclusive filter-in option (default)
         if(((c->flag & filter_in_mask) != 0 && (c->flag & filter_out_mask) == 0)
                                         || (c->flag == 0 && filter_in_mask == 0xFFFFFFFF)) {
@@ -2000,29 +1991,29 @@ int go_bam(const char* bam_arg, int argc, const char** argv, Op op, htsFile *bam
                         overlapping_mates.clear();
                         sprintf(cov_prefix, "cov\t%d", ptid);
                         if(coverage_opt || bigwig_opt || auc_opt) {
-                            all_auc += print_array(cov_prefix, hdr->target_name[ptid], coverages, hdr->target_len[ptid], false, bwfp, cov_fh, gcov_fh, dont_output_coverage);
+                            all_auc += print_array(cov_prefix, hdr->target_name[ptid], coverages.get(), hdr->target_len[ptid], false, bwfp, cov_fh, gcov_fh, dont_output_coverage);
                             if(unique) {
                                 sprintf(cov_prefix, "ucov\t%d", ptid);
-                                unique_auc += print_array(cov_prefix, hdr->target_name[ptid], unique_coverages, hdr->target_len[ptid], false, ubwfp, cov_fh, gcov_fh, dont_output_coverage);
+                                unique_auc += print_array(cov_prefix, hdr->target_name[ptid], unique_coverages.get(), hdr->target_len[ptid], false, ubwfp, cov_fh, gcov_fh, dont_output_coverage);
                             }
                         }
                         //if we also want to sum coverage across a user supplied file of annotated regions
                         int keep_order_idx = keep_order?2:-1;
                         if(sum_annotation && annotations->find(hdr->target_name[ptid]) != annotations->end()) {
-                            sum_annotations(coverages, (*annotations)[hdr->target_name[ptid]], hdr->target_len[ptid], hdr->target_name[ptid], afp, &annotated_auc, op, !annotation_opt, keep_order_idx);
+                            sum_annotations(coverages.get(), (*annotations)[hdr->target_name[ptid]], hdr->target_len[ptid], hdr->target_name[ptid], afp, &annotated_auc, op, !annotation_opt, keep_order_idx);
                             if(unique) {
                                 keep_order_idx = keep_order?3:-1;
-                                sum_annotations(unique_coverages, (*annotations)[hdr->target_name[ptid]], hdr->target_len[ptid], hdr->target_name[ptid], uafp, &unique_annotated_auc, op, !annotation_opt, keep_order_idx);
+                                sum_annotations(unique_coverages.get(), (*annotations)[hdr->target_name[ptid]], hdr->target_len[ptid], hdr->target_name[ptid], uafp, &unique_annotated_auc, op, !annotation_opt, keep_order_idx);
                             }
                             if(!keep_order)
                                 annotation_chrs_seen->insert(hdr->target_name[ptid]);
                         }
                     }
-                    reset_array(coverages, chr_size);
+                    reset_array(coverages.get(), chr_size);
                     if(unique)
-                        reset_array(unique_coverages, chr_size);
+                        reset_array(unique_coverages.get(), chr_size);
                 }
-                end_refpos = calculate_coverage(rec, coverages, unique_coverages, double_count, bw_unique_min_qual, &overlapping_mates, &total_intron_len);
+                end_refpos = calculate_coverage(rec, coverages.get(), unique_coverages.get(), double_count, bw_unique_min_qual, &overlapping_mates, &total_intron_len);
             }
             //additional counting options which make use of knowing the end coordinate/maplen
             //however, if we're already running calculate_coverage, we don't need to redo this
@@ -2076,8 +2067,8 @@ int go_bam(const char* bam_arg, int argc, const char** argv, Op op, htsFile *bam
                                 fprintf(refp,"%s\t%d\t%d\n", hdr->target_name[ptid], j+1, ends[j]);
                         }
                     }
-                    reset_array(starts, chr_size);
-                    reset_array(ends, chr_size);
+                    reset_array(starts.get(), chr_size);
+                    reset_array(ends.get(), chr_size);
                 }
                 if(bw_unique_min_qual == 0 || rec->core.qual >= bw_unique_min_qual) {
                     starts[refpos]++;
@@ -2141,29 +2132,29 @@ int go_bam(const char* bam_arg, int argc, const char** argv, Op op, htsFile *bam
                 //output
                 coords* cl = (coords*) junctions[1];
                 int sz = cl->size();
-                char* jx_str = nullptr;
+                std::unique_ptr<char[]> jx_str;
                 //first create jx string for any of the normal conditions
                 if(sz >= 4 || (paired && sz >= 2)) {
-                    jx_str = new char[jx_str_sz];
+                    jx_str.reset(new char[jx_str_sz]);
                     //coordinates are 1-based chromosome
-                    int ix = sprintf(jx_str, "%s\t%d\t%d\t%d\t%s\t", hdr->target_name[tid], refpos+1, (c->flag & 16) != 0, tlen_orig, cigar_str);
+                    int ix = sprintf(jx_str.get(), "%s\t%d\t%d\t%d\t%s\t", hdr->target_name[tid], refpos+1, (c->flag & 16) != 0, tlen_orig, cigar_str);
                     //int ix = sprintf(jx_str, "%s\t%d\t%d\t%d\t", hdr->target_name[tid], refpos+1, (c->flag & 16) != 0, tlen_orig);
                     for(int jx = 0; jx < sz; jx++) {
                         uint32_t coord = refpos + (*cl)[jx];
                         if(jx % 2 == 0) {
                             if(jx >=2 )
-                                ix += sprintf(jx_str+ix, ",");
-                            ix += sprintf(jx_str+ix, "%d-", coord+1);
+                                ix += sprintf(jx_str.get()+ix, ",");
+                            ix += sprintf(jx_str.get()+ix, "%d-", coord+1);
                         }
                         else
-                            ix += sprintf(jx_str+ix, "%d", coord);
+                            ix += sprintf(jx_str.get()+ix, "%d", coord);
                     }
                 }
                 //now determine if we're 1st/2nd/single mate
                 if(paired) {
                     //first mate
                     if(tlen > 0 && sz >= 2) {
-                        jx_pairs[qname] = jx_str;
+                        jx_pairs[qname] = jx_str.get();
                         jx_counts[qname] = sz;
                     }
                     //2nd mate
@@ -2187,18 +2178,16 @@ int go_bam(const char* bam_arg, int argc, const char** argv, Op op, htsFile *bam
                         if(sz >= 4 || (mate_sz >= 2 && sz >= 2)) {
                             if(prev_mate_printed)
                                 fprintf(jxs_file, "\t");
-                            fprintf(jxs_file, "%s", jx_str);
+                            fprintf(jxs_file, "%s", jx_str.get());
                             prev_mate_printed = true;
                         }
                         if(prev_mate_printed)
                             fprintf(jxs_file,"\n");
-                        delete jx_str;
                     }
                 }
                 //not paired, only care if we have 2 or more introns
                 else if(sz >= 4) {
-                    fprintf(jxs_file, "%s\n", jx_str);
-                    delete jx_str;
+                    fprintf(jxs_file, "%s\n", jx_str.get());
                 }
                 //reset for next alignment
                 *((uint32_t*) junctions[0]) = 0;
@@ -2219,18 +2208,18 @@ int go_bam(const char* bam_arg, int argc, const char** argv, Op op, htsFile *bam
         if(ptid != -1) {
             sprintf(cov_prefix, "cov\t%d", ptid);
             if(coverage_opt || bigwig_opt || auc_opt) {
-                all_auc += print_array(cov_prefix, hdr->target_name[ptid], coverages, hdr->target_len[ptid], false, bwfp, cov_fh, gcov_fh, dont_output_coverage);
+                all_auc += print_array(cov_prefix, hdr->target_name[ptid], coverages.get(), hdr->target_len[ptid], false, bwfp, cov_fh, gcov_fh, dont_output_coverage);
                 if(unique) {
                     sprintf(cov_prefix, "ucov\t%d", ptid);
-                    unique_auc += print_array(cov_prefix, hdr->target_name[ptid], unique_coverages, hdr->target_len[ptid], false, ubwfp, cov_fh, gcov_fh, dont_output_coverage);
+                    unique_auc += print_array(cov_prefix, hdr->target_name[ptid], unique_coverages.get(), hdr->target_len[ptid], false, ubwfp, cov_fh, gcov_fh, dont_output_coverage);
                 }
             }
             if(sum_annotation && annotations->find(hdr->target_name[ptid]) != annotations->end()) {
                 int keep_order_idx = keep_order?2:-1;
-                sum_annotations(coverages, (*annotations)[hdr->target_name[ptid]], hdr->target_len[ptid], hdr->target_name[ptid], afp, &annotated_auc, op, false, keep_order_idx);
+                sum_annotations(coverages.get(), (*annotations)[hdr->target_name[ptid]], hdr->target_len[ptid], hdr->target_name[ptid], afp, &annotated_auc, op, false, keep_order_idx);
                 if(unique) {
                     keep_order_idx = keep_order?3:-1;
-                    sum_annotations(unique_coverages, (*annotations)[hdr->target_name[ptid]], hdr->target_len[ptid], hdr->target_name[ptid], uafp, &unique_annotated_auc, op, false, keep_order_idx);
+                    sum_annotations(unique_coverages.get(), (*annotations)[hdr->target_name[ptid]], hdr->target_len[ptid], hdr->target_name[ptid], uafp, &unique_annotated_auc, op, false, keep_order_idx);
                 }
                 if(!keep_order)
                     annotation_chrs_seen->insert(hdr->target_name[ptid]);
@@ -2245,9 +2234,6 @@ int go_bam(const char* bam_arg, int argc, const char** argv, Op op, htsFile *bam
             if(unique)
                 fprintf(auc_file, "UNIQUE_READS_ANNOTATED_BASES\t%" PRIu64 "\n", unique_annotated_auc);
         }
-        delete[] coverages;
-        if(unique)
-            delete[] unique_coverages;
         if(sum_annotation && !keep_order) {
             output_missing_annotations(annotations, annotation_chrs_seen, afp);
             if(unique)
@@ -2268,8 +2254,6 @@ int go_bam(const char* bam_arg, int argc, const char** argv, Op op, htsFile *bam
                     fprintf(refp,"%s\t%d\t%d\n", hdr->target_name[ptid], j+1, ends[j]);
             }
         }
-        delete[] starts;
-        delete[] ends;
     }
     if(bwfp) {
         bwClose(bwfp);
@@ -2289,7 +2273,7 @@ int go_bam(const char* bam_arg, int argc, const char** argv, Op op, htsFile *bam
         fclose(cov_fh);
     if(gzip && gcov_fh) {
         sprintf(temp_afn, "%s.coverage.tsv.gz", prefix);
-        //if(bgzf_index_dump(gcov_fh, temp_afn, ".gsi") < 0) {
+        //if(bgzf_index_dump(gcov_fh, temp_afn, ".gsi") < 0)
         //min_shift=14, tbx_conf_bed, towrite out .csi
         bgzf_close(gcov_fh);
         if(tbx_index_build(temp_afn, min_shift, &tconf) != 0) {
