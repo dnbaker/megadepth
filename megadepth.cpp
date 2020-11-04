@@ -728,7 +728,7 @@ static uint64_t print_array(const char* prefix,
                 }
                 else {
                     if(buf_written > 0) {
-                        bufptr[0]='\0';
+                        //bufptr[0]='\0';
                         (*printPtr)(cfh, buf, buf_len);
                     }
                     // This printing step could also be u32toa_countlut-ified
@@ -1064,8 +1064,9 @@ static void sum_annotations(const uint32_t* coverages, const std::vector<T*>& an
         T sum = 0;
         T start = annotations[z][0];
         T end = annotations[z][1];
-        T local_sum = 0;
-        for(j = start; j < end; j++) {
+        T local_sum = coverages[start];
+        // SIMDify summation?
+        for(j = start + 1; j < end; j++) {
             assert(j < chr_size);
             local_sum += coverages[j];
         }
@@ -1073,7 +1074,7 @@ static void sum_annotations(const uint32_t* coverages, const std::vector<T*>& an
         (*annotated_auc) = (*annotated_auc) + sum;
         if(!just_auc) {
             if(op == cmean) 
-                sum = (double)local_sum / ((double)(end-start));
+                sum = double(local_sum) / (end-start);
             if(keep_order_idx == -1) {
                 int buf_len = (*printPtr)(buf, chrm, (long) start, (long) end, sum, nullptr, 0);
                 (*outputFunc)(ofp, buf, buf_len);
