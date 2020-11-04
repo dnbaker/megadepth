@@ -210,7 +210,11 @@ static const char USAGE[] = "BAM and BigWig utility.\n"
     "\n";
 
 int my_write(void* fh, char* buf, uint32_t buf_len) {
+#if USE_POSIX
+    return ::write(::fileno(fh), buf, bu_len);
+#else
     return std::fwrite(buf, 1, buf_len, (FILE *)fh);
+#endif
 }
 
 int my_gzwrite(void* fh, char* buf, uint32_t buf_len) {
