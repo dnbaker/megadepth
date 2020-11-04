@@ -38,8 +38,10 @@
 #include <string>
 #include <vector>
 #include <thread>
+#include <iterator>
+#include <numeric>
+
 #include <zlib.h>
-#include<iterator>
 
 #include <htslib/sam.h>
 #include <htslib/bgzf.h>
@@ -63,7 +65,9 @@
     template<class V2>
     using hashset = robin_hood::unordered_set<V2>;
 #endif
-
+#if defined(__AVX2__) || defined(__SSE2__)
+#include <x86intrin.h>
+#endif
 #if defined(__GNUC__) || defined(__clang__)
 #  ifndef unlikely
 #    define unlikely(x) __builtin_expect(!!(x), 0)
@@ -206,12 +210,12 @@ static const char USAGE[] = "BAM and BigWig utility.\n"
     "\n";
 
 int my_write(void* fh, char* buf, uint32_t buf_len) {
-    return fprintf((FILE*) fh, "%s", buf); 
+    return fprintf((FILE*) fh, "%s", buf);
 }
 
 int my_gzwrite(void* fh, char* buf, uint32_t buf_len) {
     return bgzf_write((BGZF*)fh, buf, buf_len);
-    //return gzwrite(*((gzFile*) fh), buf, buf_len); 
+    //return gzwrite(*((gzFile*) fh), buf, buf_len);
 }
 
 template <typename T>
@@ -297,7 +301,7 @@ static const char** get_option(
 
 /**
  * Holds an MDZ "operation"
- * op can be 
+ * op can be
  */
 struct MdzOp {
     char op;
@@ -365,7 +369,7 @@ static inline std::ostream& qstr_substring(std::ostream& os, const uint8_t *str,
             i--;
         }
         return os;
-    }   
+    }
     for(size_t i = off; i < off + run; i++) {
         os << (char)(str[i]+33);
     }
@@ -488,7 +492,7 @@ static void output_from_cigar_mdz(
                 if(seq_off == 0)
                     direction = '-';
                 (*total_softclip_count)+=run;
-                if(only_polya_sc) { 
+                if(only_polya_sc) {
                     char c;
                     int count_polya = polya_check(seq, seq_off, (size_t)run, &c);
                     if(count_polya != -1 && run >= SOFTCLIP_POLYA_TOTAL_COUNT_MIN) {
@@ -496,7 +500,7 @@ static void output_from_cigar_mdz(
                         fout << run << ',' << direction << ',' << c << ',' << count_polya << '\n';
                     }
                 }
-                else { 
+                else {
                     fout << rec->core.tid << ',' << ref_off << ",S,";
                     seq_substring(fout, seq, seq_off, (size_t)run) << '\n';
                 }
@@ -546,7 +550,7 @@ static void output_from_cigar(const bam1_t *rec, std::fstream& fout, uint64_t* t
                     if(seqpos == 0)
                         direction = '-';
                     (*total_softclip_count) += run;
-                    if(only_polya_sc) { 
+                    if(only_polya_sc) {
                         char c;
                         int count_polya = polya_check(seq, (size_t)seqpos, (size_t)run, &c);
                         if(count_polya != -1 && run >= SOFTCLIP_POLYA_TOTAL_COUNT_MIN) {
@@ -554,7 +558,7 @@ static void output_from_cigar(const bam1_t *rec, std::fstream& fout, uint64_t* t
                             fout << run << ',' << direction << ',' << c << ',' << count_polya << '\n';
                         }
                     }
-                    else { 
+                    else {
                         fout << rec->core.tid << ',' << refpos << ',' << BAM_CIGAR_STR[op] << ',';
                         seq_substring(fout, seq, (size_t)seqpos, (size_t)run) << '\n';
                     }
@@ -610,11 +614,11 @@ static const long get_longest_target_size(const bam_hdr_t * hdr) {
 static void reset_array(uint32_t* arr, const long arr_sz) {
     std::fill_n(arr, arr_sz, int32_t(0));
 }
-                                
+
 typedef hashmap<uint32_t,uint32_t> int2int;
-static uint64_t print_array(const char* prefix, 
+static uint64_t print_array(const char* prefix,
                         char* chrm,
-                        const uint32_t* arr, 
+                        const uint32_t* arr,
                         const long arr_sz,
                         const bool skip_zeros,
                         bigWigFile_t* bwfp,
@@ -640,11 +644,11 @@ static uint64_t print_array(const char* prefix,
     if(!bwfp) {
       buf = new char[OUT_BUFF_SZ];
       bufptr = buf;
-      cfh = cov_fh; 
+      cfh = cov_fh;
       //writing gzip
       if(!cov_fh) {
         printPtr = &my_gzwrite;
-        cfh = gcov_fh; 
+        cfh = gcov_fh;
       }
     }
     //TODO: speed this up, maybe keep a separate vector
@@ -689,21 +693,21 @@ static uint64_t print_array(const char* prefix,
                             memcpy(bufptr, chrm, chrnamelen);
                             char *oldbufptr = bufptr;
                             bufptr += chrnamelen;
-                            
+
                             *bufptr++='\t';
                             //idea from https://github.com/brentp/mosdepth/releases/tag/v0.2.9
                             uint32_t digits = u32toa_countlut(last_pos, bufptr, '\t');
                             bufptr+=digits+1;
-                            
+
                             digits = u32toa_countlut(i, bufptr, '\t');
                             bufptr+=digits+1;
-                            
+
                             digits = u32toa_countlut(running_value, bufptr, '\n');
                             bufptr+=digits+1;
-                            
+
                             buf_len += (bufptr - oldbufptr); // Track bytes written using the distance bufptr has traveled
                             buf_written++;
-                        } 
+                        }
                         first_print = false;
                     }
                 }
@@ -755,7 +759,7 @@ static void process_cigar(int n_cigar, const uint32_t *cigar, char** cigar_str, 
         char op_char[2];
         op_char[0] = (char) bam_cigar_opchr(cigar[k]);
         op_char[1] = '\0';
-        cx += sprintf((*cigar_str)+cx, "%d%s", len, op_char); 
+        cx += sprintf((*cigar_str)+cx, "%d%s", len, op_char);
         int i = 0;
         //now call each callback function
         for(auto const& func : *callbacks) {
@@ -802,8 +806,8 @@ static void extract_junction(const int op, const int len, args_list* out) {
 
 
 typedef hashmap<std::string, uint32_t*> read2len;
-static const int32_t calculate_coverage(const bam1_t *rec, uint32_t* coverages, 
-                                        uint32_t* unique_coverages, const bool double_count, 
+static const int32_t calculate_coverage(const bam1_t *rec, uint32_t* coverages,
+                                        uint32_t* unique_coverages, const bool double_count,
                                         const int min_qual, read2len* overlapping_mates,
                                         int32_t* total_intron_length) {
     int32_t refpos = rec->core.pos;
@@ -817,7 +821,7 @@ static const int32_t calculate_coverage(const bam1_t *rec, uint32_t* coverages,
     bool unique = min_qual > 0;
     bool passing_qual = rec->core.qual >= min_qual;
     //fix paired mate overlap double counting
-    //fix overlapping mate pair, only if 1) 2nd mate and 
+    //fix overlapping mate pair, only if 1) 2nd mate and
     //2) we're either not unique, or we're higher than the required quality
     int32_t mendpos = 0;
     int n_mspans = 0;
@@ -833,9 +837,9 @@ static const int32_t calculate_coverage(const bam1_t *rec, uint32_t* coverages,
     //for the later mate to adjust its coverage appropriately
     if(coverages && !double_count && (rec->core.flag & BAM_FPROPER_PAIR) == 2) {
         auto mit = overlapping_mates->find(tn);
-    
+
         if(rec->core.tid == rec->core.mtid &&
-                end_pos > mrefpos && 
+                end_pos > mrefpos &&
                 refpos <= mrefpos &&
                 mit == overlapping_mates->end()) {
             const uint32_t* mcigar = bam_get_cigar(rec);
@@ -925,7 +929,7 @@ static const int32_t calculate_coverage(const bam1_t *rec, uint32_t* coverages,
                             }
                             left_end = next_left_end;
                         }
-                    }    
+                    }
                 }
                 algn_end_pos += len;
             }
@@ -954,7 +958,7 @@ static const int32_t calculate_coverage(const bam1_t *rec, uint32_t* coverages,
                         if(left_end < mspans[mspans_idx * 2])
                             left_end = mspans[mspans_idx * 2];
                         //check 1) we've still got mate spans 2) current segment overlaps the current mate span
-                        while(mspans_idx < n_mspans && left_end < mspans[mspans_idx * 2 + 1] 
+                        while(mspans_idx < n_mspans && left_end < mspans[mspans_idx * 2 + 1]
                                                     && cur_end > mspans[mspans_idx * 2]) {
                             //set right end of segment to decrement
                             int32_t right_end = cur_end;
@@ -976,7 +980,7 @@ static const int32_t calculate_coverage(const bam1_t *rec, uint32_t* coverages,
                             }
                             left_end = next_left_end;
                         }
-                    }    
+                    }
                 }
                 algn_end_pos += len;
             }
@@ -1026,7 +1030,7 @@ static const int process_region_line(char* line, const char* delim, annotation_m
     it->second.push_back(coords);
     return ret;
 }
-    
+
 template <typename T>
 static const int read_annotation(FILE* fin, annotation_map_t<T>* amap, strlist* chrm_order, bool keep_order, uint64_t* num_annotations) {
     char *line = (char *)std::malloc(LINE_BUFFER_LENGTH);
@@ -1050,6 +1054,124 @@ static const int read_annotation(FILE* fin, annotation_map_t<T>* amap, strlist* 
     return err;
 }
 
+
+template<typename T>
+T simd_local_sum(const T *ptr, size_t n) {
+    // Default to std::accumulate for sum
+    return std::accumulate(ptr, ptr + n, T(0));
+}
+
+#ifdef __AVX2__
+__attribute__((always_inline)) inline
+__m256i broadcast_add(__m256i x) {
+    __m256i y = _mm256_permute2f128_si256(x, x, 1);
+    __m256i m1 = _mm256_add_epi64(x, y);
+    __m256i m2 = _mm256_castpd_si256(_mm256_permute_pd(_mm256_castsi256_pd(m1), 5));
+    __m256i newmaxv = _mm256_add_epi64(m1, m2);
+    return newmaxv;
+};
+__attribute__((always_inline)) inline
+__m256d broadcast_add(__m256d x) {
+    __m256d y = _mm256_permute2f128_pd(x, x, 1);
+    __m256d m1 = _mm256_add_pd(x, y);
+    __m256d m2 = _mm256_permute_pd(m1, 5);
+    __m256d newmaxv = _mm256_add_pd(m1, m2);
+    return newmaxv;
+};
+#endif
+
+
+#if defined(__AVX2__) || defined(__SSE2__)
+template<>
+long simd_local_sum(const long *lptr, size_t n) {
+    static_assert(sizeof(long) == sizeof(uint64_t), "Size must match uint64_t");
+    long ret;
+    size_t i = 0;
+    const uint64_t *ptr = (uint64_t *)lptr;
+#ifdef __AVX2__
+    static constexpr size_t nper = sizeof(__m256d) / sizeof(long);
+    const size_t nsimd = n / nper;
+    const size_t nsimd4 = (nsimd >> 2) << 2;
+    __m256i s = _mm256_setzero_si256();
+    for(; i < nsimd4; i += 4) {
+        __m256i v1 = _mm256_loadu_si256((__m256i *)(ptr + (i * nper)));
+        __m256i v2 = _mm256_loadu_si256((__m256i *)(ptr + ((i + 1) * nper)));
+        __m256i v3 = _mm256_loadu_si256((__m256i *)(ptr + ((i + 2) * nper)));
+        __m256i v4 = _mm256_loadu_si256((__m256i *)(ptr + ((i + 3) * nper)));
+        __m256i v12 = _mm256_add_epi64(v1, v2);
+        __m256i v34 = _mm256_add_epi64(v3, v4);
+        s = _mm256_add_epi64(s, _mm256_add_epi64(v12, v34));
+    }
+    i *= nper;
+    s = broadcast_add(s);
+    ret = ((uint64_t *)&s)[0];
+#elif __SSE2__
+    static constexpr size_t nper = sizeof(__m128i) / sizeof(long);
+    const size_t nsimd = n / nper;
+    const size_t nsimd4 = (nsimd >> 2) << 2;
+    __m128i s = _mm_setzero_si128();
+    for(size_t i = 0; i < nsimd4; i += 4) {
+        __m128i v1 = _mm_loadu_si128((__m128i *)(ptr + (i * nper)));
+        __m128i v2 = _mm_loadu_si128((__m128i *)(ptr + ((i + 1) * nper)));
+        __m128i v3 = _mm_loadu_si128((__m128i *)(ptr + ((i + 2) * nper)));
+        __m128i v4 = _mm_loadu_si128((__m128i *)(ptr + ((i + 3) * nper)));
+        __m128i v12 = _mm_add_epi64(v1, v2);
+        __m128i v34 = _mm_add_epi64(v3, v4);
+        s = _mm_add_epi64(s, _mm_add_epi64(v12, v34));
+    }
+    i *= nper;
+    ret = ((uint64_t *)&s)[0] + ((uint64_t *)&s)[1];
+#endif
+    for(;i < n; ++i) {
+        ret += s[i];
+    }
+    return ret;
+}
+
+template<>
+double simd_local_sum(const double *ptr, size_t n) {
+    double ret;
+    size_t i = 0;
+#ifdef __AVX2__
+    static constexpr size_t nper = sizeof(__m256d) / sizeof(double);
+    const size_t nsimd = n / nper;
+    const size_t nsimd4 = (nsimd >> 2) << 2;
+    __m256d s = _mm256_setzero_pd();
+    for(; i < nsimd4; i += 4) {
+        __m256d v1 = _mm256_loadu_pd(ptr + (i * nper));
+        __m256d v2 = _mm256_loadu_pd(ptr + ((i + 1) * nper));
+        __m256d v3 = _mm256_loadu_pd(ptr + ((i + 2) * nper));
+        __m256d v4 = _mm256_loadu_pd(ptr + ((i + 3) * nper));
+        __m256d v12 = _mm256_add_pd(v1, v2);
+        __m256d v34 = _mm256_add_pd(v3, v4);
+        s = _mm256_add_pd(s, _mm256_add_pd(v12, v34));
+    }
+    i *= nper;
+    ret = broadcast_add(s)[0];
+#elif __SSE2__
+    constexpr size_t nper = sizeof(__m128d) / sizeof(double);
+    const size_t nsimd = n / nper;
+    const size_t nsimd4 = (nsimd >> 2) << 2;
+    __m128d s = _mm_setzero_pd();
+    for(size_t i = 0; i < nsimd4; i += 4) {
+        __m128d v1 = _mm_loadu_pd(ptr + (i * nper));
+        __m128d v2 = _mm_loadu_pd(ptr + ((i + 1) * nper));
+        __m128d v3 = _mm_loadu_pd(ptr + ((i + 2) * nper));
+        __m128d v4 = _mm_loadu_pd(ptr + ((i + 3) * nper));
+        __m128d v12 = _mm_add_pd(v1, v2);
+        __m128d v34 = _mm_add_pd(v3, v4);
+        s = _mm_add_pd(s, _mm_add_pd(v12, v34));
+    }
+    i *= nper;
+    ret = s[0] + s[1];
+#endif
+    for(;i < n; ++i) {
+        ret += s[i];
+    }
+    return ret;
+}
+#endif /* defined(__AVX2__) || defined(__SSE2__) */
+
 enum Op { csum, cmean, cmin, cmax };
 typedef hashmap<std::string, int> str2op;
 template <typename T>
@@ -1064,16 +1186,12 @@ static void sum_annotations(const uint32_t* coverages, const std::vector<T*>& an
         T sum = 0;
         T start = annotations[z][0];
         T end = annotations[z][1];
-        T local_sum = coverages[start];
-        // SIMDify summation?
-        for(j = start + 1; j < end; j++) {
-            assert(j < chr_size);
-            local_sum += coverages[j];
-        }
+        assert(double(size_t(start)) == double(start)); // Ensure that start is integral
+        const T local_sum = simd_local_sum(&coverages[ptrdiff_t(start)], end - start);
         sum += local_sum;
         (*annotated_auc) = (*annotated_auc) + sum;
         if(!just_auc) {
-            if(op == cmean) 
+            if(op == cmean)
                 sum = double(local_sum) / (end-start);
             if(keep_order_idx == -1) {
                 int buf_len = (*printPtr)(buf, chrm, (long) start, (long) end, sum, nullptr, 0);
@@ -1108,7 +1226,7 @@ static bigWigFile_t* create_bigwig_file(const bam_hdr_t *hdr, const char* out_fn
 
 int KALLISTO_MAX_FRAG_LENGTH = 1000;
 typedef hashmap<int32_t, uint32_t> fraglen2count;
-static void print_frag_distribution(const fraglen2count* frag_dist, FILE* outfn) 
+static void print_frag_distribution(const fraglen2count* frag_dist, FILE* outfn)
 {
     double mean = 0.0;
     uint64_t count = 0;
@@ -1139,10 +1257,10 @@ static void print_frag_distribution(const fraglen2count* frag_dist, FILE* outfn)
     fprintf(outfn, "STAT\tKALLISTO_COUNT\t%" PRIu64 "\n", kcount);
     fprintf(outfn, "STAT\tKALLISTO_MEAN_LENGTH\t%.3f\n", kmean);
 }
-            
+
 void output_read_sequence_and_qualities(char* qname, int midx, uint8_t* seq, uint8_t* qual, size_t l_qseq, bool reversed, std::ostream* outfh, bool one_file) {
     (*outfh) << "@" << qname;
-    if(!one_file)            
+    if(!one_file)
         (*outfh) << "/" << midx;
     (*outfh) << "\n";
     seq_substring(*outfh, seq, 0, l_qseq, reversed);
@@ -1240,7 +1358,7 @@ static int process_bigwig(const char* fn, double* annotated_auc, annotation_map_
     //loop through all the chromosomes in the BW
     for(tid = 0; tid < fp->cl->nKeys; tid++)
     {
-        //only process the chromosome if it's in the annotation 
+        //only process the chromosome if it's in the annotation
         if(amap->find(fp->cl->chrom[tid]) != amap->end()) {
             iter = bwOverlappingIntervalsIterator(fp, fp->cl->chrom[tid], 0, fp->cl->len[tid], blocksPerIteration);
             if(!iter->data)
@@ -1306,11 +1424,11 @@ static int process_bigwig(const char* fn, double* annotated_auc, annotation_map_
                                     sum += iter->intervals->value[j];
                                 break;
                             case cmin:
-                                for(k = start; k < last_k; k++) 
+                                for(k = start; k < last_k; k++)
                                     min = iter->intervals->value[j] < min ? iter->intervals->value[j]:min;
                                 break;
                             case cmax:
-                                for(k = start; k < last_k; k++) 
+                                for(k = start; k < last_k; k++)
                                     max = iter->intervals->value[j] > max ? iter->intervals->value[j]:max;
                                 break;
                         }
@@ -1548,7 +1666,7 @@ int go_bw(const char* bw_arg, int argc, const char** argv, Op op, htsFile *bam_f
     fprintf(stderr,"Processing %s\n",bw_arg);
     fflush(stderr);
     //just do all/total AUC if no options are passed in
-    if(argc == 1 
+    if(argc == 1
             || (argc == 2 && has_option(argv, argv+argc, "--auc"))
             || (argc == 3 && has_option(argv, argv+argc, "--bwbuffer"))
             || (argc == 4 && has_option(argv, argv+argc, "--bwbuffer") && has_option(argv, argv+argc, "--auc"))) {
@@ -1625,7 +1743,7 @@ int go_bw(const char* bw_arg, int argc, const char** argv, Op op, htsFile *bam_f
         if(afpz)
             bgzf_close(afpz);
         std::free(bwfn);
-        return 0; 
+        return 0;
     }
     //don't have a list of BigWigs, so just process the single one
     int ret = process_bigwig(bw_arg, &annotated_total_auc, annotations, annotation_chrs_seen, afp, keep_order_idx, op=op);
@@ -1675,7 +1793,7 @@ public:
         if((bidx = sam_index_load(bfh, bam_fn)) == 0) {
             fprintf(stderr,"no index for BAM/CRAM file, doing full scan\n");
             return;
-        } 
+        }
         uint32_t amap_count = annotations_count;
         amap = new char[amap_count*NUM_CHARS_IN_REGION_STR];
         amap_ptr = new char*[amap_count];
@@ -1705,8 +1823,8 @@ public:
     BAMIterator& operator++() {
         int r = itrPtr(b, bfh, bhdr, sam_itr);
         if(r < 0)
-            b = nullptr; 
-        return *this; 
+            b = nullptr;
+        return *this;
     }
 
     BAMIterator operator++(int) {BAMIterator temp(*this); operator++(); return temp;}
@@ -1738,8 +1856,8 @@ int go_bam(const char* bam_arg, int argc, const char** argv, Op op, htsFile *bam
         print_header(hdr);
     }
     hts_set_threads(bam_fh, nthreads);
-    
-    
+
+
     //setup list of callbacks for the process_cigar()
     //this is so we only have to walk the cigar for each alignment ~1 time
     callback_list process_cigar_callbacks;
@@ -1795,7 +1913,7 @@ int go_bam(const char* bam_arg, int argc, const char** argv, Op op, htsFile *bam
     bigWigFile_t *ubwfp = nullptr;
     //--coverage -> output perbase coverage to STDOUT (compute_coverage=true)
     //--bigwig -> output perbase coverage to bigwig (compute_coverage=true),
-    //  this option overrides --coverage=>coverage will be *only* written to the bigwig 
+    //  this option overrides --coverage=>coverage will be *only* written to the bigwig
     //  even if --coverage is also passed in
     //--auc -> output AUC of coverage (compute_coverage=true)
     //--annotation output annotated regions of coverage (compute_coverage=true)
@@ -1815,7 +1933,7 @@ int go_bam(const char* bam_arg, int argc, const char** argv, Op op, htsFile *bam
     bool no_coverage_stdout = gzip || has_option(argv, argv+argc, "--no-coverage-stdout");
     //gzFile gcov_fh;
     BGZF* gcov_fh = nullptr;
-    
+
     bool unique = has_option(argv, argv+argc, "--min-unique-qual");
     FILE* uafp = nullptr;
     BGZF* uafpz = nullptr;
@@ -1876,7 +1994,7 @@ int go_bam(const char* bam_arg, int argc, const char** argv, Op op, htsFile *bam
         rsfp = fopen(refn,"w");
         sprintf(refn, "%s.ends.tsv", prefix);
         refp = fopen(refn,"w");
-        if(chr_size == -1) 
+        if(chr_size == -1)
             chr_size = get_longest_target_size(hdr);
         starts.reset(new uint32_t[chr_size]);
         ends.reset(new uint32_t[chr_size]);
@@ -1929,7 +2047,7 @@ int go_bam(const char* bam_arg, int argc, const char** argv, Op op, htsFile *bam
     if(long_reads)
         //enough for the cigar string and ~100 junctions
         jx_str_sz = 12048;
-    
+
     //no filter out by default
     int filter_in_mask = 0xFFFFFFFF;
     if(has_option(argv, argv+argc, "--filter-in")) {
@@ -1976,7 +2094,7 @@ int go_bam(const char* bam_arg, int argc, const char** argv, Op op, htsFile *bam
             int32_t tid = rec->core.tid;
             int32_t tlen = rec->core.isize;
 
-            
+
             if(softclip_file)
                 total_number_sequence_bases_processed += c->l_qseq;
 
@@ -2023,7 +2141,7 @@ int go_bam(const char* bam_arg, int argc, const char** argv, Op op, htsFile *bam
             if(print_frag_dist) {
                 //csaw's getPESizes criteria
                 //first, don't count read that's got problems
-                if((c->flag & BAM_FSECONDARY) == 0 && (c->flag & BAM_FSUPPLEMENTARY) == 0 && 
+                if((c->flag & BAM_FSECONDARY) == 0 && (c->flag & BAM_FSUPPLEMENTARY) == 0 &&
                         (c->flag & BAM_FPAIRED) != 0 && (c->flag & BAM_FMUNMAP) == 0 &&
                         ((c->flag & BAM_FREAD1) != 0) != ((c->flag & BAM_FREAD2) != 0) && rec->core.tid == rec->core.mtid) {
                     //are we the later mate? if so we calculate the frag length
@@ -2264,7 +2382,7 @@ int go_bam(const char* bam_arg, int argc, const char** argv, Op op, htsFile *bam
     //based on Tabix source: https://github.com/samtools/htslib/blob/develop/tabix.c
     char temp_afn[1024];
     tbx_conf_t tconf = tbx_conf_bed;
-    int min_shift = 14; 
+    int min_shift = 14;
     if(cov_fh && cov_fh != stdout)
         fclose(cov_fh);
     if(gzip && gcov_fh) {
@@ -2330,7 +2448,7 @@ int go(const char* fname_arg, int argc, const char** argv, Op op, htsFile *bam_f
     bool keep_order = !has_option(argv, argv+argc, "--keep-order");
     strlist chrm_order;
     FILE* afp = nullptr;
-    annotation_map_t<T> annotations; 
+    annotation_map_t<T> annotations;
     bool sum_annotation = false;
     chr2bool annotation_chrs_seen;
     //setup hashmap to store BED file of *non-overlapping* annotated intervals to sum coverage across
@@ -2354,7 +2472,7 @@ int go(const char* fname_arg, int argc, const char** argv, Op op, htsFile *bam_f
         afp = fopen(afile, "r");
         err = read_annotation(afp, &annotations, &chrm_order, keep_order, &num_annotations);
         fclose(afp);
-        
+
         afp = stdout;
         if(gzip || no_annotation_stdout) {
             char afn[1024];
@@ -2373,10 +2491,10 @@ int go(const char* fname_arg, int argc, const char** argv, Op op, htsFile *bam_f
         std::cerr << annotations.size() << " chromosomes for annotated regions read\n";
     }
     //if no args are passed in other than a file (BAM or BW)
-    //then just compute the auc 
+    //then just compute the auc
     FILE* auc_file = nullptr;
     //if we 1) have no params OR 2) we have no params but --bwbuffer OR 3) --auc with/wo any other options
-    if(argc == 1 
+    if(argc == 1
             || has_option(argv, argv+argc, "--auc")
             || (argc == 3 && has_option(argv, argv+argc, "--bwbuffer"))) {
         auc_file = stdout;
@@ -2462,7 +2580,7 @@ int main(int argc, const char** argv) {
                 hts_set_opt(bam_fh, CRAM_OPT_DECODE_MD, 1);
                 hts_set_opt(bam_fh, CRAM_OPT_REQUIRED_FIELDS, SAM_QNAME | SAM_FLAG | SAM_RNAME | SAM_POS | SAM_MAPQ | SAM_CIGAR | SAM_MAPQ | SAM_RNEXT | SAM_PNEXT | SAM_TLEN | SAM_QUAL | SAM_AUX | SAM_RGAUX | SAM_SEQ);
             }
-            if(has_option(argv, argv+argc, "--fasta")) { 
+            if(has_option(argv, argv+argc, "--fasta")) {
                 const char* fasta_file = *(get_option(argv, argv+argc, "--fasta"));
                 int ret = hts_set_fai_filename(bam_fh, fasta_file);
                 if(ret != 0) {
