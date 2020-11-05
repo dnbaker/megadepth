@@ -1031,8 +1031,9 @@ static const int32_t calculate_coverage(const bam1_t *rec, uint32_t* coverages,
 
 //typedef hashmap<std::string, std::vector<long*>*> annotation_map_t;
 //typedef hashmap<std::string, std::vector<void*>*> annotation_map_t;
-template <typename T>
-using annotation_map_t = hashmap<std::string, std::vector<T*>>;
+template<typename T> using annotation_t = std::array<T, 4>;
+template <typename T> using annotation_map_t = hashmap<std::string, std::vector<annotation_t<T>>>;
+//template <typename T>using annotation_map_t = hashmap<std::string, std::vector<T*>>;
 typedef std::vector<char*> strlist;
 //about 3x faster than the sstring/string::getline version
 template <typename T>
@@ -1057,17 +1058,12 @@ static const int process_region_line(char* line, const char* delim, annotation_m
         tok = strtok(nullptr, delim);
     }
     //if we need to keep the order, then we'll store values here
-    const int alen = keep_order?4:2;
-    T* coords = new T[alen];
-    coords[0] = start;
-    coords[1] = end;
-    std::fill(coords + 2, coords + alen, 0);
     auto it = amap->find(chrm);
     if(it == amap->end()) {
         chrm_order->push_back(chrm);
-        it = amap->emplace(chrm, std::vector<T*>()).first;
+        it = amap->emplace(chrm, std::vector<annotation_t<T>>()).first;
     }
-    it->second.push_back(coords);
+    it->second.push_back({start, end, 0, 0});
     return ret;
 }
 
@@ -1214,8 +1210,9 @@ double simd_local_sum(const double *ptr, size_t n) {
 
 enum Op { csum, cmean, cmin, cmax };
 typedef hashmap<std::string, int> str2op;
+
 template <typename T>
-static void sum_annotations(const uint32_t* coverages, const std::vector<T*>& annotations, const long chr_size, const char* chrm, FILE* ofp, uint64_t* annotated_auc, Op op, bool just_auc = false, int keep_order_idx = -1) {
+static void sum_annotations(const uint32_t* coverages, std::vector<annotation_t<T>>& annotations, const long chr_size, const char* chrm, FILE* ofp, uint64_t* annotated_auc, Op op, bool just_auc = false, int keep_order_idx = -1) {
     unsigned long z, j;
     int (*printPtr) (char* buf, const char*, long, long, T, double*, long) = &print_shared;
     int (*outputFunc)(void* fh, char* buf, uint32_t buf_len) = &my_write;
@@ -1226,7 +1223,7 @@ static void sum_annotations(const uint32_t* coverages, const std::vector<T*>& an
         T sum = 0;
         auto start = annotations[z][0];
         auto end = annotations[z][1];
-        const T local_sum = simd_local_sum(&coverages[start], end - start);
+        const T local_sum = simd_local_sum(&coverages[std::ptrdiff_t(start)], end - start);
         sum += local_sum;
         (*annotated_auc) = (*annotated_auc) + sum;
         if(!just_auc) {
@@ -1418,7 +1415,7 @@ static int process_bigwig(const char* fn, double* annotated_auc, annotation_map_
             }
             uint32_t istart = iter->intervals->start[0];
             uint32_t iend = iter->intervals->end[num_intervals-1];
-            std::vector<T*>& annotations = amap->operator[](fp->cl->chrom[tid]);
+            std::vector<annotation_t<T>>& annotations = amap->operator[](fp->cl->chrom[tid]);
             long z, j, k;
             long last_j = 0;
             long asz = annotations.size();
@@ -1435,7 +1432,7 @@ static int process_bigwig(const char* fn, double* annotated_auc, annotation_map_
             }
             //loop through annotation intervals as outer loop
             for(z = 0; z < asz; z++) {
-                const auto &az = annotations[z];
+                auto &az = annotations[z];
                 double sum = 0;
                 double min = MAX_INT;
                 double max = 0;
@@ -1558,7 +1555,7 @@ void output_all_coverage_ordered_by_BED(const strlist* chrm_order, annotation_ma
     for(auto const c : *chrm_order) {
         if(!c)
             continue;
-        std::vector<T*>& annotations_for_chr = (*annotations)[c];
+        std::vector<annotation_t<T>>& annotations_for_chr = (*annotations)[c];
         int (*printPtr) (char*, const char*, long, long, T, double*, long) = &print_shared;
         if(SUMS_ONLY)
             printPtr = &print_shared_sums_only;
@@ -1838,7 +1835,7 @@ public:
         amap_ptr = new char*[amap_count];
         uint64_t k = 0;
         for(auto const c : *chrm_order) {
-            std::vector<T*>& annotations_for_chr = (*annotations)[c];
+            const auto& annotations_for_chr = (*annotations)[c];
             for(long z = 0; z < annotations_for_chr.size(); z++) {
                 const auto &item = annotations_for_chr[z];
                 const T start = item[0], end = item[1];
