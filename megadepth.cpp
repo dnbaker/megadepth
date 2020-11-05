@@ -1224,10 +1224,9 @@ static void sum_annotations(const uint32_t* coverages, const std::vector<T*>& an
     char* buf = new char[1024];
     for(z = 0; z < annotations.size(); z++) {
         T sum = 0;
-        T start = annotations[z][0];
-        T end = annotations[z][1];
-        assert(double(size_t(start)) == double(start)); // Ensure that start is integral
-        const T local_sum = simd_local_sum(&coverages[ptrdiff_t(start)], end - start);
+        auto start = annotations[z][0];
+        auto end = annotations[z][1];
+        const T local_sum = simd_local_sum(&coverages[start], end - start);
         sum += local_sum;
         (*annotated_auc) = (*annotated_auc) + sum;
         if(!just_auc) {
