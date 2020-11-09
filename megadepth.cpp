@@ -616,45 +616,44 @@ static const long get_longest_target_size(const bam_hdr_t * hdr) {
 }
 
 static void reset_array(uint32_t* arr, const long arr_sz) {
-#if 0
-#if __AVX2__
-    __m256i zero = _mm256_setzero_si256();
-    static constexpr size_t nper = sizeof(__m256i) / sizeof(uint32_t);
-    const size_t nsimd = arr_sz / nper;
-    const size_t nsimd4 = (nsimd / 4) * 4;
-    size_t i = 0;
-    for(; i < nsimd4; i += 4) {
-        _mm256_storeu_si256((__m256i *)(arr + nper * i), zero);
-        _mm256_storeu_si256((__m256i *)(arr + nper * (i + 1)), zero);
-        _mm256_storeu_si256((__m256i *)(arr + nper * (i + 2)), zero);
-        _mm256_storeu_si256((__m256i *)(arr + nper * (i + 3)), zero);
-    }
-    for(;i < nsimd; ++i) {
-        _mm256_storeu_si256((__m256i *)(arr + nper * i), zero);
-    }
-    for(i *= sizeof(__m256i) / sizeof(uint32_t); i < arr_sz; ++i) {
-        arr[i] = 0;
-    }
-#elif __SSE2__
-    __m128i zero = _mm_setzero_si128();
-    const size_t nsimd = arr_sz / 4;
-    const size_t nsimd4 = (nsimd / 4) * 4;
-    size_t i = 0;
-    for(; i < nsimd4; i += 4) {
-        _mm_storeu_si128((__m128i *)(arr + 4 * i), zero);
-        _mm_storeu_si128((__m128i *)(arr + 4 * (i + 1)), zero);
-        _mm_storeu_si128((__m128i *)(arr + 4 * (i + 2)), zero);
-        _mm_storeu_si128((__m128i *)(arr + 4 * (i + 3)), zero);
-    }
-    for(;i < nsimd; ++i) {
-        _mm_storeu_si128((__m128i *)(arr + 4 * i), zero);
-    }
-    for(i *= 4; i < arr_sz; ++i) {
-        arr[i] = 0;
-    }
+#if USE_SIMD_ZERO
+    #if __AVX2__
+        __m256i zero = _mm256_setzero_si256();
+        static constexpr size_t nper = sizeof(__m256i) / sizeof(uint32_t);
+        const size_t nsimd = arr_sz / nper;
+        const size_t nsimd4 = (nsimd / 4) * 4;
+        size_t i = 0;
+        for(; i < nsimd4; i += 4) {
+            _mm256_storeu_si256((__m256i *)(arr + nper * i), zero);
+            _mm256_storeu_si256((__m256i *)(arr + nper * (i + 1)), zero);
+            _mm256_storeu_si256((__m256i *)(arr + nper * (i + 2)), zero);
+            _mm256_storeu_si256((__m256i *)(arr + nper * (i + 3)), zero);
+        }
+        for(;i < nsimd; ++i) {
+            _mm256_storeu_si256((__m256i *)(arr + nper * i), zero);
+        }
+        for(i *= sizeof(__m256i) / sizeof(uint32_t); i < arr_sz; ++i) {
+            arr[i] = 0;
+        }
+    #elif __SSE2__
+        __m128i zero = _mm_setzero_si128();
+        const size_t nsimd = arr_sz / 4;
+        const size_t nsimd4 = (nsimd / 4) * 4;
+        size_t i = 0;
+        for(; i < nsimd4; i += 4) {
+            _mm_storeu_si128((__m128i *)(arr + 4 * i), zero);
+            _mm_storeu_si128((__m128i *)(arr + 4 * (i + 1)), zero);
+            _mm_storeu_si128((__m128i *)(arr + 4 * (i + 2)), zero);
+            _mm_storeu_si128((__m128i *)(arr + 4 * (i + 3)), zero);
+        }
+        for(;i < nsimd; ++i) {
+            _mm_storeu_si128((__m128i *)(arr + 4 * i), zero);
+        }
+        for(i *= 4; i < arr_sz; ++i) {
+            arr[i] = 0;
+        }
+    #endif
 #else
-#endif
-#endif
     std::memset(arr, 0, sizeof(uint32_t) * arr_sz);
 #endif
 }
@@ -890,7 +889,7 @@ static inline void decrement_coverages(uint32_t *coverages, uint32_t *unique_cov
     i *= nper;
 #endif
     for(; i < ninc; ++i) {
-        ++coverages[i]; ++unique_coverages[i];
+        --coverages[i]; --unique_coverages[i];
     }
 }
 
@@ -929,9 +928,7 @@ static inline void decrement_coverages(uint32_t *coverages, int ninc) {
     }
     i *= nper;
 #endif
-    for(; i < ninc; ++i) {
-        ++coverages[i];
-    }
+    for(; i < ninc; --coverages[i++]);
 }
 
 static inline void increment_coverages(uint32_t *coverages, int ninc) {
@@ -966,9 +963,7 @@ static inline void increment_coverages(uint32_t *coverages, int ninc) {
     }
     i *= nper;
 #endif
-    for(; i < ninc; ++i) {
-        ++coverages[i];
-    }
+    for(; i < ninc; ++coverages[i++]);
 }
 
 static inline void increment_coverages(uint32_t *coverages, uint32_t *unique_coverages, int start, int ninc) {
