@@ -845,6 +845,171 @@ static void extract_junction(const int op, const int len, args_list* out) {
 }
 
 
+
+static inline void decrement_coverages(uint32_t *coverages, uint32_t *unique_coverages, int start, int ninc) {
+    coverages += start;
+    unique_coverages += start;
+#if __AVX512F__
+    const size_t nper = sizeof(__m512) / sizeof(int32_t);
+    size_t nsimd = ninc / nper;
+#elif __AVX2__
+    const size_t nper = sizeof(__m256) / sizeof(int32_t);
+    size_t nsimd = ninc / nper;
+#elif __SSE2__
+    const size_t nper = sizeof(__m128) / sizeof(int32_t);
+    size_t nsimd = ninc / nper;
+#endif
+
+    int i = 0;
+#if __AVX512F__
+    #pragma GCC unroll 4
+    for(;i < nsimd; ++i) {
+        auto s1 = _mm512_set1_epi32(-1);
+        _mm512_storeu_si512((__m512i *)(coverages + i * nper), _mm512_add_epi32(s1, _mm512_loadu_si512((__m512i *)(coverages + i * nper))));
+        _mm512_storeu_si512((__m512i *)(unique_coverages + i * nper), _mm512_add_epi32(s1, _mm512_loadu_si512((__m512i *)(unique_coverages + i * nper))));
+    }
+    i *= nper;
+#elif __AVX2__
+    #pragma GCC unroll 4
+    for(;i < nsimd; ++i) {
+        auto s1 = _mm256_set1_epi32(-1);
+        _mm256_storeu_si256((__m256i *)(coverages + i * nper), _mm256_add_epi32(s1, _mm256_loadu_si256((__m256i *)(coverages + i * nper))));
+        _mm256_storeu_si256((__m256i *)(unique_coverages + i * nper), _mm256_add_epi32(s1, _mm256_loadu_si256((__m256i *)(unique_coverages + i * nper))));
+    }
+    i *= nper;
+#elif __SSE2__
+    #pragma GCC unroll 4
+    for(;i < nsimd; ++i) {
+        auto s1 = _mm_set1_epi32(-1);
+        _mm_storeu_si128((__m128i *)(coverages + i * nper), _mm_add_epi32(s1, _mm_loadu_si128((__m128i *)(coverages + i * nper))));
+        _mm_storeu_si128((__m128i *)(unique_coverages + i * nper), _mm_add_epi32(s1, _mm_loadu_si128((__m128i *)(unique_coverages + i * nper))));
+    }
+    i *= nper;
+#endif
+    for(; i < ninc; ++i) {
+        ++coverages[i]; ++unique_coverages[i];
+    }
+}
+
+static inline void decrement_coverages(uint32_t *coverages, int ninc) {
+#if __AVX512F__
+    const size_t nper = sizeof(__m512) / sizeof(int32_t);
+    size_t nsimd = ninc / nper;
+#elif __AVX2__
+    const size_t nper = sizeof(__m256) / sizeof(int32_t);
+    size_t nsimd = ninc / nper;
+#elif __SSE2__
+    const size_t nper = sizeof(__m128) / sizeof(int32_t);
+    size_t nsimd = ninc / nper;
+#endif
+
+    int i = 0;
+#if __AVX512F__
+    #pragma GCC unroll 4
+    for(;i < nsimd; ++i) {
+        auto s1 = _mm512_set1_epi32(-1);
+        _mm512_storeu_si512((__m512i *)(coverages + i * nper), _mm512_add_epi32(s1, _mm512_loadu_si512((__m512i *)(coverages + i * nper))));
+    }
+    i *= nper;
+#elif __AVX2__
+    #pragma GCC unroll 4
+    for(;i < nsimd; ++i) {
+        auto s1 = _mm256_set1_epi32(-1);
+        _mm256_storeu_si256((__m256i *)(coverages + i * nper), _mm256_add_epi32(s1, _mm256_loadu_si256((__m256i *)(coverages + i * nper))));
+    }
+    i *= nper;
+#elif __SSE2__
+    #pragma GCC unroll 4
+    for(;i < nsimd; ++i) {
+        auto s1 = _mm_set1_epi32(-1);
+        _mm_storeu_si128((__m128i *)(coverages + i * nper), _mm_add_epi32(s1, _mm_loadu_si128((__m128i *)(coverages + i * nper))));
+    }
+    i *= nper;
+#endif
+    for(; i < ninc; ++i) {
+        ++coverages[i];
+    }
+}
+
+static inline void increment_coverages(uint32_t *coverages, int ninc) {
+#if __AVX512F__
+    const size_t nper = sizeof(__m512) / sizeof(int32_t);
+    size_t nsimd = ninc / nper;
+#elif __AVX2__
+    const size_t nper = sizeof(__m256) / sizeof(int32_t);
+    size_t nsimd = ninc / nper;
+#elif __SSE2__
+    const size_t nper = sizeof(__m128) / sizeof(int32_t);
+    size_t nsimd = ninc / nper;
+#endif
+
+    int i = 0;
+#if __AVX512F__
+    for(;i < nsimd; ++i) {
+        auto s1 = _mm512_set1_epi32(1);
+        _mm512_storeu_si512((__m512i *)(coverages + i * nper), _mm512_add_epi32(s1, _mm512_loadu_si512((__m512i *)(coverages + i * nper))));
+    }
+    i *= nper;
+#elif __AVX2__
+    for(;i < nsimd; ++i) {
+        auto s1 = _mm256_set1_epi32(1);
+        _mm256_storeu_si256((__m256i *)(coverages + i * nper), _mm256_add_epi32(s1, _mm256_loadu_si256((__m256i *)(coverages + i * nper))));
+    }
+    i *= nper;
+#elif __SSE2__
+    for(;i < nsimd; ++i) {
+        auto s1 = _mm_set1_epi32(1);
+        _mm_storeu_si128((__m128i *)(coverages + i * nper), _mm_add_epi32(s1, _mm_loadu_si128((__m128i *)(coverages + i * nper))));
+    }
+    i *= nper;
+#endif
+    for(; i < ninc; ++i) {
+        ++coverages[i];
+    }
+}
+
+static inline void increment_coverages(uint32_t *coverages, uint32_t *unique_coverages, int start, int ninc) {
+    coverages += start;
+    unique_coverages += start;
+#if __AVX512F__
+    const size_t nper = sizeof(__m512) / sizeof(int32_t);
+    size_t nsimd = ninc / nper;
+#elif __AVX2__
+    const size_t nper = sizeof(__m256) / sizeof(int32_t);
+    size_t nsimd = ninc / nper;
+#elif __SSE2__
+    const size_t nper = sizeof(__m128) / sizeof(int32_t);
+    size_t nsimd = ninc / nper;
+#endif
+
+    int i = 0;
+#if __AVX512F__
+    for(;i < nsimd; ++i) {
+        auto s1 = _mm512_set1_epi32(1);
+        _mm512_storeu_si512((__m512i *)(coverages + i * nper), _mm512_add_epi32(s1, _mm512_loadu_si512((__m512i *)(coverages + i * nper))));
+        _mm512_storeu_si512((__m512i *)(unique_coverages + i * nper), _mm512_add_epi32(s1, _mm512_loadu_si512((__m512i *)(unique_coverages + i * nper))));
+    }
+    i *= nper;
+#elif __AVX2__
+    for(;i < nsimd; ++i) {
+        auto s1 = _mm256_set1_epi32(1);
+        _mm256_storeu_si256((__m256i *)(coverages + i * nper), _mm256_add_epi32(s1, _mm256_loadu_si256((__m256i *)(coverages + i * nper))));
+        _mm256_storeu_si256((__m256i *)(unique_coverages + i * nper), _mm256_add_epi32(s1, _mm256_loadu_si256((__m256i *)(unique_coverages + i * nper))));
+    }
+    i *= nper;
+#elif __SSE2__
+    for(;i < nsimd; ++i) {
+        auto s1 = _mm_set1_epi32(1);
+        _mm_storeu_si128((__m128i *)(coverages + i * nper), _mm_add_epi32(s1, _mm_loadu_si128((__m128i *)(coverages + i * nper))));
+        _mm_storeu_si128((__m128i *)(unique_coverages + i * nper), _mm_add_epi32(s1, _mm_loadu_si128((__m128i *)(unique_coverages + i * nper))));
+    }
+    i *= nper;
+#endif
+    for(; i < ninc; ++i) {
+        ++coverages[i]; ++unique_coverages[i];
+    }
+}
+
 typedef hashmap<std::string, uint32_t*> read2len;
 static const int32_t calculate_coverage(const bam1_t *rec, uint32_t* coverages,
                                         uint32_t* unique_coverages, const bool double_count,
@@ -931,10 +1096,7 @@ static const int32_t calculate_coverage(const bam1_t *rec, uint32_t* coverages,
                     (*total_intron_length) = (*total_intron_length) + len;
                 //are we calc coverages && do we consume query?
                 if(coverages && bam_cigar_type(cigar_op)&1) {
-                    for(z = algn_end_pos; z < algn_end_pos + len; z++) {
-                        coverages[z]++;
-                        unique_coverages[z]++;
-                    }
+                    increment_coverages(coverages, unique_coverages, algn_end_pos, len);
                     //now fixup overlapping segment but only if mate passed quality
                     if(n_mspans > 0 && algn_end_pos < mendpos) {
                         //loop until we find the next overlapping span
@@ -962,11 +1124,9 @@ static const int32_t calculate_coverage(const bam1_t *rec, uint32_t* coverages,
                             else {
                                 next_left_end = mspans[mspans_idx * 2 + 1];
                             }
-                            for(z = left_end; z < right_end; z++) {
-                                coverages[z]--;
-                                if(mate_passes_quality)
-                                    unique_coverages[z]--;
-                            }
+                            decrement_coverages(coverages + left_end, right_end - left_end);
+                            if(mate_passes_quality)
+                                decrement_coverages(unique_coverages + left_end, right_end - left_end);
                             left_end = next_left_end;
                         }
                     }
@@ -984,9 +1144,7 @@ static const int32_t calculate_coverage(const bam1_t *rec, uint32_t* coverages,
                     (*total_intron_length) = (*total_intron_length) + len;
                 //are we calc coverages && do we consume query?
                 if(coverages && bam_cigar_type(cigar_op)&1) {
-                    for(z = algn_end_pos; z < algn_end_pos + len; z++) {
-                        coverages[z]++;
-                    }
+                    increment_coverages(&coverages[algn_end_pos], len);
                     //now fixup overlapping segment
                     if(n_mspans > 0 && algn_end_pos < mendpos) {
                         //loop until we find the next overlapping span
@@ -1015,9 +1173,7 @@ static const int32_t calculate_coverage(const bam1_t *rec, uint32_t* coverages,
                             else {
                                 next_left_end = mspans[mspans_idx * 2 + 1];
                             }
-                            for(z = left_end; z < right_end; z++) {
-                                coverages[z]--;
-                            }
+                            decrement_coverages(&coverages[left_end], right_end - left_end);
                             left_end = next_left_end;
                         }
                     }
@@ -1063,7 +1219,7 @@ static const int process_region_line(char* line, const char* delim, annotation_m
         chrm_order->push_back(chrm);
         it = amap->emplace(chrm, std::vector<annotation_t<T>>()).first;
     }
-    it->second.push_back({start, end, 0, 0});
+    it->second.push_back({T(start), T(end), 0, 0});
     return ret;
 }
 
