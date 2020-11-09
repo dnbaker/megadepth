@@ -616,6 +616,7 @@ static const long get_longest_target_size(const bam_hdr_t * hdr) {
 }
 
 static void reset_array(uint32_t* arr, const long arr_sz) {
+#if 0
 #if __AVX2__
     __m256i zero = _mm256_setzero_si256();
     static constexpr size_t nper = sizeof(__m256i) / sizeof(uint32_t);
@@ -652,6 +653,8 @@ static void reset_array(uint32_t* arr, const long arr_sz) {
         arr[i] = 0;
     }
 #else
+#endif
+#endif
     std::memset(arr, 0, sizeof(uint32_t) * arr_sz);
 #endif
 }
